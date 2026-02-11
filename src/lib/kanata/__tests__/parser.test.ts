@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { tokenize, parseSExp, parseKanataConfig } from '../parser';
 import { generateConfig, keyActionToString } from '../generator';
 import { basicHomeRowMods, advancedHomeRowMods } from '../presets';
-import type { TapHoldAction, AliasRef, MultiAction, LayerAction, SList } from '../types';
+import type { TapHoldAction, AliasRef, MultiAction, LayerAction, MacroAction, SList } from '../types';
 
 // ============================================================================
 // Tokenizer tests
@@ -449,5 +449,40 @@ describe('presets', () => {
     const aAlias = config.aliases.find((a) => a.name === 'a');
     const action = aAlias?.action as TapHoldAction;
     expect(action.variant).toBe('tap-hold-release-keys');
+  });
+});
+
+// ============================================================================
+// Macro parsing tests
+// ============================================================================
+
+describe('macro parsing', () => {
+  it('parses a basic macro', () => {
+    const input = `
+      (defsrc a)
+      (defalias m (macro a 100 b))
+      (deflayer base @m)
+    `;
+    const config = parseKanataConfig(input);
+    expect(config.aliases.length).toBe(1);
+    const action = config.aliases[0].action as MacroAction;
+    expect(action.type).toBe('macro');
+    expect(action.variant).toBe('macro');
+    expect(action.items).toEqual(['a', 100, 'b']);
+  });
+
+  it('round-trips a macro action', () => {
+    const input = `
+      (defsrc a)
+      (defalias m (macro-repeat a 50 b 50 c))
+      (deflayer base @m)
+    `;
+    const config = parseKanataConfig(input);
+    const generated = generateConfig(config);
+    const reparsed = parseKanataConfig(generated);
+    const action = reparsed.aliases[0].action as MacroAction;
+    expect(action.type).toBe('macro');
+    expect(action.variant).toBe('macro-repeat');
+    expect(action.items).toEqual(['a', 50, 'b', 50, 'c']);
   });
 });

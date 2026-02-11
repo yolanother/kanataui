@@ -7,6 +7,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Mutex;
+use tauri::Emitter;
 use tauri_plugin_autostart::MacosLauncher;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
@@ -23,6 +24,7 @@ const MAX_LOG_LINES: usize = 1000;
 
 /// Core start logic, callable from both the command and the tray handler.
 pub async fn do_start_kanata(
+    binary_path: &str,
     config_path: &str,
     process: &Mutex<Option<Child>>,
     log_lines: &std::sync::Arc<Mutex<VecDeque<String>>>,
@@ -33,7 +35,7 @@ pub async fn do_start_kanata(
         return Err("Kanata is already running".into());
     }
 
-    let mut child = tokio::process::Command::new("kanata")
+    let mut child = tokio::process::Command::new(binary_path)
         .args(["-c", config_path])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -104,10 +106,21 @@ pub async fn do_stop_kanata(
 #[tauri::command]
 async fn start_kanata(
     config_path: String,
+    app: tauri::AppHandle,
     state: tauri::State<'_, KanataState>,
     log_state: tauri::State<'_, LogState>,
 ) -> Result<(), String> {
-    do_start_kanata(&config_path, &state.process, &log_state.lines).await
+    let binary = get_kanata_binary_path()?;
+    match do_start_kanata(&binary, &config_path, &state.process, &log_state.lines).await {
+        Ok(()) => {
+            let _ = app.emit("kanata-started", ());
+            Ok(())
+        }
+        Err(e) => {
+            let _ = app.emit("kanata-error", e.clone());
+            Err(e)
+        }
+    }
 }
 
 fn format_timestamp() -> String {
@@ -123,8 +136,20 @@ fn format_timestamp() -> String {
 }
 
 #[tauri::command]
-async fn stop_kanata(state: tauri::State<'_, KanataState>) -> Result<(), String> {
-    do_stop_kanata(&state.process).await
+async fn stop_kanata(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, KanataState>,
+) -> Result<(), String> {
+    match do_stop_kanata(&state.process).await {
+        Ok(()) => {
+            let _ = app.emit("kanata-stopped", ());
+            Ok(())
+        }
+        Err(e) => {
+            let _ = app.emit("kanata-error", e.clone());
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]
@@ -191,9 +216,51 @@ fn ensure_config_dir() -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
+/// Construct the Tauri sidecar binary name for the current platform.
+/// Tauri externalBin names follow the pattern: `name-{target_triple}[.exe]`
+fn sidecar_binary_name(base_name: &str) -> String {
+    let triple = current_target_triple();
+    if cfg!(target_os = "windows") {
+        format!("{}-{}.exe", base_name, triple)
+    } else {
+        format!("{}-{}", base_name, triple)
+    }
+}
+
+fn current_target_triple() -> &'static str {
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    match (os, arch) {
+        ("windows", "x86_64") => "x86_64-pc-windows-msvc",
+        ("linux", "x86_64") => "x86_64-unknown-linux-gnu",
+        ("macos", "aarch64") => "aarch64-apple-darwin",
+        ("macos", "x86_64") => "x86_64-apple-darwin",
+        _ => "unknown",
+    }
+}
+
 #[tauri::command]
 fn get_kanata_binary_path() -> Result<String, String> {
-    // Check if kanata is in PATH
+    // 1. Check for Tauri sidecar binary next to the current exe
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            let sidecar = dir.join(sidecar_binary_name("kanata"));
+            if sidecar.exists() {
+                return Ok(sidecar.to_string_lossy().to_string());
+            }
+            // Also check plain name (dev mode)
+            let plain = dir.join(if cfg!(target_os = "windows") {
+                "kanata.exe"
+            } else {
+                "kanata"
+            });
+            if plain.exists() {
+                return Ok(plain.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    // 2. Fall back to PATH lookup
     let cmd = if cfg!(target_os = "windows") {
         "where"
     } else {
@@ -203,21 +270,8 @@ fn get_kanata_binary_path() -> Result<String, String> {
         if output.status.success() {
             let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !path.is_empty() {
-                return Ok(path);
-            }
-        }
-    }
-
-    // Check common bundled locations
-    if let Ok(exe_dir) = std::env::current_exe() {
-        if let Some(dir) = exe_dir.parent() {
-            let bundled = dir.join(if cfg!(target_os = "windows") {
-                "kanata.exe"
-            } else {
-                "kanata"
-            });
-            if bundled.exists() {
-                return Ok(bundled.to_string_lossy().to_string());
+                let first_line = path.lines().next().unwrap_or(&path);
+                return Ok(first_line.to_string());
             }
         }
     }
@@ -273,13 +327,26 @@ async fn run_simulation(config_text: String, sim_input: String) -> Result<String
 }
 
 fn get_sim_binary_path() -> Result<String, String> {
-    let binary_name = if cfg!(target_os = "windows") {
-        "kanata_simulated_input.exe"
-    } else {
-        "kanata_simulated_input"
-    };
+    // 1. Check for Tauri sidecar binary next to the current exe
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(dir) = exe_path.parent() {
+            let sidecar = dir.join(sidecar_binary_name("kanata_simulated_input"));
+            if sidecar.exists() {
+                return Ok(sidecar.to_string_lossy().to_string());
+            }
+            // Also check plain name (dev mode)
+            let plain = dir.join(if cfg!(target_os = "windows") {
+                "kanata_simulated_input.exe"
+            } else {
+                "kanata_simulated_input"
+            });
+            if plain.exists() {
+                return Ok(plain.to_string_lossy().to_string());
+            }
+        }
+    }
 
-    // Check if in PATH
+    // 2. Fall back to PATH lookup
     let cmd = if cfg!(target_os = "windows") {
         "where"
     } else {
@@ -289,19 +356,8 @@ fn get_sim_binary_path() -> Result<String, String> {
         if output.status.success() {
             let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !path.is_empty() {
-                // On Windows, `where` may return multiple lines; use the first
                 let first_line = path.lines().next().unwrap_or(&path);
                 return Ok(first_line.to_string());
-            }
-        }
-    }
-
-    // Check bundled location
-    if let Ok(exe_dir) = std::env::current_exe() {
-        if let Some(dir) = exe_dir.parent() {
-            let bundled = dir.join(binary_name);
-            if bundled.exists() {
-                return Ok(bundled.to_string_lossy().to_string());
             }
         }
     }

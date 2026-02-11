@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { QwertyEditor } from './components/keyboard/QwertyEditor';
 import { ErgoEditor } from './components/keyboard/ErgoEditor';
@@ -17,6 +18,8 @@ import { LogViewer } from './components/log/LogViewer';
 import { SettingsDialog } from './components/settings/SettingsDialog';
 import { AssistantFab } from './components/assistant/AssistantFab';
 import { AssistantDialog } from './components/assistant/AssistantDialog';
+import { useToast } from './lib/use-toast';
+import { ToastContainer } from './components/ui/Toast';
 
 type KanataStatus = 'stopped' | 'running';
 type TabId = 'wizard' | 'editor' | 'preview' | 'logs' | 'export';
@@ -32,6 +35,7 @@ function App() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const { toasts, addToast, dismissToast } = useToast();
 
   // Config context value
   const configStore = useMemo<ConfigStore>(
@@ -125,6 +129,53 @@ function App() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
+  // Listen for backend events (kanata start/stop/error)
+  useEffect(() => {
+    const unlisten: Array<() => void> = [];
+    listen('kanata-started', () => {
+      setStatus('running');
+      addToast('Kanata started successfully', 'success');
+    }).then((u) => unlisten.push(u));
+    listen('kanata-stopped', () => {
+      setStatus('stopped');
+      addToast('Kanata stopped', 'info');
+    }).then((u) => unlisten.push(u));
+    listen<string>('kanata-error', (event) => {
+      addToast(`Kanata error: ${event.payload}`, 'error');
+    }).then((u) => unlisten.push(u));
+    return () => unlisten.forEach((u) => u());
+  }, [addToast]);
+
+  // Start kanata handler — auto-save if dirty, then start
+  const handleStartKanata = useCallback(async () => {
+    // Auto-save if there are unsaved changes
+    if (isDirty && configFilePath) {
+      try {
+        const text = generateConfig(config);
+        await invoke('save_config', { path: configFilePath, content: text });
+        setDirty(false);
+      } catch (e) {
+        addToast(`Failed to save before starting: ${e}`, 'error');
+        return;
+      }
+    }
+    try {
+      await invoke('start_kanata', { configPath: configFilePath });
+      setActiveTab('logs');
+    } catch (e) {
+      addToast(`Failed to start kanata: ${e}`, 'error');
+    }
+  }, [isDirty, configFilePath, config, addToast]);
+
+  // Stop kanata handler
+  const handleStopKanata = useCallback(async () => {
+    try {
+      await invoke('stop_kanata');
+    } catch (e) {
+      addToast(`Failed to stop kanata: ${e}`, 'error');
+    }
+  }, [addToast]);
+
   // Wizard completion handler — auto-saves to disk
   const handleWizardComplete = useCallback(async (result: WizardResult) => {
     setConfig(result.config);
@@ -211,6 +262,23 @@ function App() {
             >
               {status === 'running' ? 'Running' : 'Stopped'}
             </span>
+            {status === 'stopped' ? (
+              <button
+                type="button"
+                onClick={handleStartKanata}
+                className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700 transition-colors"
+              >
+                Start
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStopKanata}
+                className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 transition-colors"
+              >
+                Stop
+              </button>
+            )}
             {isDirty && (
               <span className="text-xs text-amber-500 font-medium">Unsaved changes</span>
             )}
@@ -371,6 +439,9 @@ function App() {
         {/* Modals */}
         <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
         <AssistantDialog open={assistantOpen} onClose={() => setAssistantOpen(false)} />
+
+        {/* Toast notifications */}
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       </div>
     </ConfigContext.Provider>
   );

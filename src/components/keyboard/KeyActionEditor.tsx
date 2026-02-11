@@ -5,10 +5,11 @@ import type {
   TapHoldAction,
   TapHoldVariant,
   LayerAction,
+  MacroAction,
   Alias,
   Layer,
 } from "../../lib/kanata/types";
-import { getKeyLabel, MODIFIER_KEYS, resolveActionForDisplay } from "../../lib/kanata/keys";
+import { getKeyLabel, MODIFIER_KEYS, resolveActionForDisplay, CODE_TO_KANATA } from "../../lib/kanata/keys";
 import { keyActionToString } from "../../lib/kanata/generator";
 
 // ---------------------------------------------------------------------------
@@ -35,7 +36,14 @@ const LAYER_OPS: { value: LayerAction['op']; label: string; description: string 
   { value: 'layer-while-held', label: 'Layer While Held', description: 'Activate layer while key is held' },
 ];
 
-type EditorMode = "passthrough" | "tap-hold" | "layer";
+const MACRO_VARIANT_OPTIONS = [
+  { value: 'macro', label: 'macro' },
+  { value: 'macro-repeat', label: 'macro-repeat' },
+  { value: 'macro-release-cancel', label: 'macro-release-cancel' },
+  { value: 'macro-repeat-release-cancel', label: 'macro-repeat-release-cancel' },
+];
+
+type EditorMode = "passthrough" | "tap-hold" | "layer" | "macro";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -70,6 +78,30 @@ export function KeyActionEditor({
   // Layer action mode
   const [layerOp, setLayerOp] = useState<LayerAction['op']>('layer-switch');
   const [layerTarget, setLayerTarget] = useState('');
+  const [listening, setListening] = useState(false);
+  // Macro mode
+  const [macroVariant, setMacroVariant] = useState('macro');
+  const [macroSteps, setMacroSteps] = useState<Array<{ type: 'key' | 'delay'; value: string }>>([
+    { type: 'key', value: 'a' },
+  ]);
+
+  // Listen for physical keypress to set tap key
+  useEffect(() => {
+    if (!listening) return;
+
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const kanataName = CODE_TO_KANATA[e.code];
+      if (kanataName) {
+        setTapKey(kanataName);
+      }
+      setListening(false);
+    };
+
+    document.addEventListener('keydown', handler, true); // capture phase
+    return () => document.removeEventListener('keydown', handler, true);
+  }, [listening]);
 
   // Sync state from current action when key changes
   useEffect(() => {
@@ -113,6 +145,20 @@ export function KeyActionEditor({
       return;
     }
 
+    if (resolved.type === 'macro') {
+      const ma = resolved as MacroAction;
+      setMode('macro');
+      setMacroVariant(ma.variant);
+      setMacroSteps(
+        ma.items.map(item =>
+          typeof item === 'number'
+            ? { type: 'delay' as const, value: String(item) }
+            : { type: 'key' as const, value: typeof item === 'string' ? item : keyName }
+        )
+      );
+      return;
+    }
+
     setMode("passthrough");
     setHoldIsLayer(false);
   }, [action, keyName, aliases]);
@@ -127,6 +173,15 @@ export function KeyActionEditor({
       if (!layerTarget) return;
       const la: LayerAction = { type: 'layer-action', op: layerOp, layer: layerTarget };
       onChange(keyName, la);
+      return;
+    }
+
+    if (mode === "macro") {
+      const items: (KeyAction | number)[] = macroSteps.map(step =>
+        step.type === 'delay' ? Number(step.value) || 0 : step.value
+      );
+      const ma: MacroAction = { type: 'macro', variant: macroVariant, items };
+      onChange(keyName, ma);
       return;
     }
 
@@ -183,7 +238,7 @@ export function KeyActionEditor({
 
       {/* Mode selector */}
       <div className="mb-4 flex gap-2">
-        {(["passthrough", "tap-hold", "layer"] as const).map((m) => (
+        {(["passthrough", "tap-hold", "layer", "macro"] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -195,7 +250,7 @@ export function KeyActionEditor({
                 : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
-            {m === "passthrough" ? "Simple Key" : m === "tap-hold" ? "Tap-Hold" : "Layer"}
+            {m === "passthrough" ? "Simple Key" : m === "tap-hold" ? "Tap-Hold" : m === "layer" ? "Layer" : "Macro"}
           </button>
         ))}
       </div>
@@ -205,12 +260,33 @@ export function KeyActionEditor({
         <div className="space-y-3">
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">Key Output</span>
-            <input
-              type="text"
-              value={tapKey}
-              onChange={(e) => setTapKey(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            />
+            <div className="mt-1 flex gap-2">
+              <input
+                type="text"
+                value={tapKey}
+                onChange={(e) => setTapKey(e.target.value)}
+                placeholder={listening ? "Press a key..." : ""}
+                className={cn(
+                  "block flex-1 rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring",
+                  listening
+                    ? "border-amber-500 bg-amber-500/10 animate-pulse"
+                    : "border-input bg-background focus:border-ring"
+                )}
+                readOnly={listening}
+              />
+              <button
+                type="button"
+                onClick={() => setListening(!listening)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  listening
+                    ? "bg-amber-500 text-white"
+                    : "border border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                {listening ? "Listening..." : "Listen"}
+              </button>
+            </div>
           </label>
         </div>
       )}
@@ -240,12 +316,33 @@ export function KeyActionEditor({
           {/* Tap key */}
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">Tap Action (key)</span>
-            <input
-              type="text"
-              value={tapKey}
-              onChange={(e) => setTapKey(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            />
+            <div className="mt-1 flex gap-2">
+              <input
+                type="text"
+                value={tapKey}
+                onChange={(e) => setTapKey(e.target.value)}
+                placeholder={listening ? "Press a key..." : ""}
+                className={cn(
+                  "block flex-1 rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring",
+                  listening
+                    ? "border-amber-500 bg-amber-500/10 animate-pulse"
+                    : "border-input bg-background focus:border-ring"
+                )}
+                readOnly={listening}
+              />
+              <button
+                type="button"
+                onClick={() => setListening(!listening)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  listening
+                    ? "bg-amber-500 text-white"
+                    : "border border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                {listening ? "Listening..." : "Listen"}
+              </button>
+            </div>
           </label>
 
           {/* Hold action type toggle */}
@@ -412,6 +509,72 @@ export function KeyActionEditor({
               />
             )}
           </label>
+        </div>
+      )}
+
+      {/* Macro editor */}
+      {mode === "macro" && (
+        <div className="space-y-3">
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">Macro Variant</span>
+            <select
+              value={macroVariant}
+              onChange={(e) => setMacroVariant(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              {MACRO_VARIANT_OPTIONS.map((v) => (
+                <option key={v.value} value={v.value}>{v.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <div className="space-y-2">
+            <span className="text-xs font-medium text-muted-foreground">Steps</span>
+            {macroSteps.map((step, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <select
+                  value={step.type}
+                  onChange={(e) => {
+                    const newSteps = [...macroSteps];
+                    newSteps[i] = { type: e.target.value as 'key' | 'delay', value: step.type === e.target.value ? step.value : (e.target.value === 'delay' ? '100' : 'a') };
+                    setMacroSteps(newSteps);
+                  }}
+                  className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+                >
+                  <option value="key">Key</option>
+                  <option value="delay">Delay</option>
+                </select>
+                <input
+                  type={step.type === 'delay' ? 'number' : 'text'}
+                  value={step.value}
+                  onChange={(e) => {
+                    const newSteps = [...macroSteps];
+                    newSteps[i] = { ...step, value: e.target.value };
+                    setMacroSteps(newSteps);
+                  }}
+                  placeholder={step.type === 'delay' ? 'ms' : 'key name'}
+                  className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMacroSteps(macroSteps.filter((_, j) => j !== i))}
+                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  disabled={macroSteps.length <= 1}
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setMacroSteps([...macroSteps, { type: 'key', value: '' }])}
+              className="rounded-md border border-dashed border-border px-3 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              + Add Step
+            </button>
+          </div>
         </div>
       )}
 

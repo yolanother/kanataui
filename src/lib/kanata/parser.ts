@@ -17,6 +17,7 @@ import type {
   TapHoldVariant,
   MultiAction,
   LayerAction,
+  MacroAction,
   GenericAction,
 } from './types';
 
@@ -244,6 +245,17 @@ const TAP_HOLD_VARIANTS = new Set<string>([
   'tap-hold-release-tap-keys-release',
 ]);
 
+const MACRO_VARIANTS = new Set<string>([
+  'macro',
+  'macro-repeat',
+  'macro-release-cancel',
+  'macro-repeat-release-cancel',
+  'macro-press-cmd',
+  'macro-release-cmd',
+  'macro-press-cmd-output',
+  'macro-release-cmd-output',
+]);
+
 /**
  * Convert a single S-expression into a KeyAction.
  * This interprets common kanata actions but falls back to GenericAction
@@ -287,6 +299,11 @@ export function sexpToKeyAction(s: SExp): KeyAction {
       op: head as LayerAction['op'],
       layer: atomValue(list.items[1]),
     } as LayerAction;
+  }
+
+  // macro variants
+  if (MACRO_VARIANTS.has(head)) {
+    return parseMacro(head, list);
   }
 
   // Fallback: preserve as generic
@@ -338,6 +355,24 @@ function parseTapHold(variant: TapHoldVariant, list: SList): TapHoldAction {
   }
 
   return result;
+}
+
+function parseMacro(variant: string, list: SList): MacroAction {
+  const items: (KeyAction | number)[] = [];
+  for (const item of list.items.slice(1)) {
+    if (isAtom(item)) {
+      const v = item.value;
+      const n = Number(v);
+      if (!isNaN(n) && v.match(/^\d+$/)) {
+        items.push(n);
+      } else {
+        items.push(sexpToKeyAction(item));
+      }
+    } else {
+      items.push(sexpToKeyAction(item));
+    }
+  }
+  return { type: 'macro', variant, items };
 }
 
 function parseNumberOrVar(s: SExp): number | string {

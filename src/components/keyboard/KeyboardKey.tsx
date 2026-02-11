@@ -1,7 +1,8 @@
 import { cn } from "../../lib/utils";
-import type { KeyAction, AliasRef, TapHoldAction, MultiAction, LayerAction, Alias } from "../../lib/kanata/types";
+import type { KeyAction, AliasRef, TapHoldAction, MultiAction, LayerAction, MacroAction, Alias } from "../../lib/kanata/types";
 import { getKeyLabel, isModifier, MODIFIER_SHORT, resolveActionForDisplay } from "../../lib/kanata/keys";
 import { keyActionToString } from "../../lib/kanata/generator";
+import { getKeyIcon } from "../../lib/kanata/key-icons";
 
 // ---------------------------------------------------------------------------
 // Layer action icons (inline SVGs for compact display)
@@ -128,6 +129,17 @@ function getActionDisplay(action: KeyAction | undefined): ActionDisplay {
     };
   }
 
+  // Macro action
+  if (action.type === "macro") {
+    const ma = action as MacroAction;
+    const firstKey = ma.items.find(item => typeof item === 'string');
+    return {
+      topLabel: firstKey ? getKeyLabel(firstKey as string) : 'macro',
+      bottomLabel: `macro(${ma.items.length})`,
+      isModified: true,
+    };
+  }
+
   // Generic / fallback
   return {
     topLabel: keyActionToString(action),
@@ -196,6 +208,21 @@ function getModifierStyle(action: KeyAction | undefined): string | null {
     return "bg-purple-900/60 border-purple-500/50 text-white hover:bg-purple-900/80";
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Icon helpers
+// ---------------------------------------------------------------------------
+
+/** Resolve the kanata key name to use for icon lookup. */
+function getIconKeyName(action: KeyAction | undefined, keyName: string): string {
+  if (!action) return keyName;
+  if (typeof action === 'string') return action;
+  if (action.type === 'tap-hold') {
+    const tap = (action as TapHoldAction).tapAction;
+    return typeof tap === 'string' ? tap : keyName;
+  }
+  return keyName;
 }
 
 // ---------------------------------------------------------------------------
@@ -271,7 +298,14 @@ export function KeyboardKey({
           display.bottomLabel || display.bottomIcon ? "text-[10px]" : "text-xs",
         )}
       >
-        {display.topLabel || getKeyLabel(keyName)}
+        {(() => {
+          const iconKeyName = getIconKeyName(resolvedAction, keyName);
+          const Icon = getKeyIcon(iconKeyName);
+          if (Icon) {
+            return <Icon size={14} strokeWidth={2} />;
+          }
+          return display.topLabel || getKeyLabel(keyName);
+        })()}
       </span>
 
       {/* Bottom label (hold action) with optional icon */}

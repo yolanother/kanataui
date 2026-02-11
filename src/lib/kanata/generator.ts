@@ -9,6 +9,7 @@ import type {
   TapHoldAction,
   MultiAction,
   LayerAction,
+  MacroAction,
   GenericAction,
   SExp,
   SList,
@@ -57,6 +58,14 @@ export function keyActionToString(action: KeyAction): string {
 
     case 'tap-dance':
       return `(${action.variant} ${action.timeout} (${action.actions.map(keyActionToString).join(' ')}))`;
+
+    case 'macro': {
+      const ma = action as MacroAction;
+      const items = ma.items.map(item =>
+        typeof item === 'number' ? String(item) : keyActionToString(item)
+      ).join(' ');
+      return `(${ma.variant} ${items})`;
+    }
 
     case 'generic':
       return sexpToString((action as GenericAction).sexp);

@@ -3,8 +3,9 @@
 // ============================================================================
 
 import { cn } from '../../lib/utils';
-import type { KeyAction, TapHoldAction, LayerAction, Alias } from '../../lib/kanata/types';
+import type { KeyAction, TapHoldAction, LayerAction, MacroAction, Alias } from '../../lib/kanata/types';
 import { getKeyLabel, MODIFIER_KEYS, resolveActionForDisplay } from '../../lib/kanata/keys';
+import { getKeyIcon } from '../../lib/kanata/key-icons';
 
 // ---------------------------------------------------------------------------
 // Layer action icons (inline SVGs)
@@ -54,6 +55,10 @@ function actionLabel(action: KeyAction | undefined): string {
   if (action.type === 'tap-hold') return actionLabel(action.tapAction);
   if (action.type === 'layer-action') return action.layer;
   if (action.type === 'multi') return actionLabel(action.actions[0]);
+  if (action.type === 'macro') {
+    const firstKey = (action as MacroAction).items.find((item: KeyAction | number) => typeof item === 'string');
+    return firstKey ? getKeyLabel(firstKey as string) : 'macro';
+  }
   return '...';
 }
 
@@ -220,7 +225,20 @@ export function ErgoKey({
           {layerData.abbr}
         </span>
       )}
-      <span className="font-medium leading-tight truncate max-w-full px-0.5">{tap || defsrcName}</span>
+      {(() => {
+        const iconKey = resolvedAction
+          ? (typeof resolvedAction === 'string'
+            ? resolvedAction
+            : resolvedAction.type === 'tap-hold'
+              ? (typeof (resolvedAction as TapHoldAction).tapAction === 'string' ? (resolvedAction as TapHoldAction).tapAction as string : defsrcName)
+              : defsrcName)
+          : defsrcName;
+        const Icon = getKeyIcon(iconKey);
+        if (Icon) {
+          return <span className="font-medium leading-tight"><Icon size={14} strokeWidth={2} /></span>;
+        }
+        return <span className="font-medium leading-tight truncate max-w-full px-0.5">{tap || defsrcName}</span>;
+      })()}
     </button>
   );
 }

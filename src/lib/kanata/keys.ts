@@ -120,6 +120,27 @@ export const KEY_LABELS: Record<string, string> = {
   kp8: 'KP8',
   kp9: 'KP9',
 
+  // Numpad operators
+  'kp+': 'KP+',
+  'kp-': 'KP-',
+  'kp*': 'KP*',
+  'kp/': 'KP/',
+  kprt: 'KPEnter',
+  'kp.': 'KP.',
+
+  // Media
+  mute: 'Mute',
+  volu: 'Vol+',
+  vold: 'Vol-',
+  pp: 'Play',
+  next: 'Next',
+  prev: 'Prev',
+
+  // System
+  prnt: 'PrtSc',
+  scrlck: 'ScrLk',
+  pause: 'Pause',
+
   // Mouse buttons
   mlft: 'LClick',
   mrgt: 'RClick',
@@ -303,6 +324,31 @@ export const CODE_TO_KANATA: Record<string, string> = {
   PageUp: 'pgup', PageDown: 'pgdn',
   ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'rght',
   PrintScreen: 'prnt', ScrollLock: 'scrlck', Pause: 'pause',
+  // Numpad
+  NumpadAdd: 'kp+',
+  NumpadSubtract: 'kp-',
+  NumpadMultiply: 'kp*',
+  NumpadDivide: 'kp/',
+  NumpadEnter: 'kprt',
+  NumpadDecimal: 'kp.',
+  Numpad0: 'kp0',
+  Numpad1: 'kp1',
+  Numpad2: 'kp2',
+  Numpad3: 'kp3',
+  Numpad4: 'kp4',
+  Numpad5: 'kp5',
+  Numpad6: 'kp6',
+  Numpad7: 'kp7',
+  Numpad8: 'kp8',
+  Numpad9: 'kp9',
+  NumLock: 'nlk',
+  // Media
+  AudioVolumeMute: 'mute',
+  AudioVolumeUp: 'volu',
+  AudioVolumeDown: 'vold',
+  MediaPlayPause: 'pp',
+  MediaTrackNext: 'next',
+  MediaTrackPrevious: 'prev',
 };
 
 /**

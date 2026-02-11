@@ -105,6 +105,25 @@ function KeyEditorPanel({ keyIndex, defsrcName, action, aliases, layers, onActio
   const [mode, setMode] = useState<'key' | 'layer'>(isLayerAction ? 'layer' : 'key');
   const [layerOp, setLayerOp] = useState<LayerAction['op']>(layerAct?.op ?? 'layer-switch');
   const [layerTarget, setLayerTarget] = useState(layerAct?.layer ?? '');
+  const [listening, setListening] = useState(false);
+
+  // Listen for physical keypress to set tap key
+  useEffect(() => {
+    if (!listening) return;
+
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const kanataName = CODE_TO_KANATA[e.code];
+      if (kanataName) {
+        handleTapChange(kanataName);
+      }
+      setListening(false);
+    };
+
+    document.addEventListener('keydown', handler, true); // capture phase
+    return () => document.removeEventListener('keydown', handler, true);
+  }, [listening]);
 
   // Reset local state when action changes
   useEffect(() => {
@@ -258,18 +277,38 @@ function KeyEditorPanel({ keyIndex, defsrcName, action, aliases, layers, onActio
           {/* Tap action */}
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Tap Action</label>
-            <select
-              value={tapValue}
-              onChange={(e) => handleTapChange(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-            >
-              <option value="">-- select --</option>
-              {KEY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={tapValue}
+                onChange={(e) => handleTapChange(e.target.value)}
+                className={cn(
+                  "flex-1 rounded-md border px-3 py-1.5 text-sm",
+                  listening
+                    ? "border-amber-500 bg-amber-500/10"
+                    : "border-input bg-background"
+                )}
+                disabled={listening}
+              >
+                <option value="">-- select --</option>
+                {KEY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setListening(!listening)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap",
+                  listening
+                    ? "bg-amber-500 text-white animate-pulse"
+                    : "border border-border bg-muted text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                {listening ? "Press key..." : "Listen"}
+              </button>
+            </div>
           </div>
 
           {/* Hold action type toggle */}

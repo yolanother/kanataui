@@ -1,7 +1,7 @@
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager,
+    AppHandle, Emitter, Manager,
 };
 
 const SETTINGS_WINDOW_LABEL: &str = "settings";
@@ -29,24 +29,35 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             "start_kanata" => {
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
+                    let binary = match crate::get_kanata_binary_path() {
+                        Ok(b) => b,
+                        Err(e) => {
+                            let _ = app.emit("kanata-error", format!("Binary not found: {}", e));
+                            return;
+                        }
+                    };
                     let config_dir = match crate::get_config_dir_path() {
                         Ok(dir) => dir,
                         Err(e) => {
-                            eprintln!("Failed to get config dir: {}", e);
+                            let _ = app.emit("kanata-error", format!("Config dir error: {}", e));
                             return;
                         }
                     };
                     let config_path = config_dir.join("kanata.kbd");
                     if !config_path.exists() {
-                        eprintln!("No config file found at {:?}", config_path);
+                        let _ = app.emit("kanata-error", format!("No config file found at {:?}", config_path));
                         return;
                     }
                     let config_str = config_path.to_string_lossy().to_string();
                     let kanata_state = app.state::<crate::KanataState>();
                     let log_state = app.state::<crate::LogState>();
-                    match crate::do_start_kanata(&config_str, &kanata_state.process, &log_state.lines).await {
-                        Ok(()) => eprintln!("Kanata started from tray"),
-                        Err(e) => eprintln!("Failed to start kanata from tray: {}", e),
+                    match crate::do_start_kanata(&binary, &config_str, &kanata_state.process, &log_state.lines).await {
+                        Ok(()) => {
+                            let _ = app.emit("kanata-started", ());
+                        }
+                        Err(e) => {
+                            let _ = app.emit("kanata-error", e);
+                        }
                     }
                 });
             }
@@ -55,8 +66,12 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 tauri::async_runtime::spawn(async move {
                     let state = app.state::<crate::KanataState>();
                     match crate::do_stop_kanata(&state.process).await {
-                        Ok(()) => eprintln!("Kanata stopped from tray"),
-                        Err(e) => eprintln!("Failed to stop kanata from tray: {}", e),
+                        Ok(()) => {
+                            let _ = app.emit("kanata-stopped", ());
+                        }
+                        Err(e) => {
+                            let _ = app.emit("kanata-error", e);
+                        }
                     }
                 });
             }
