@@ -10,13 +10,14 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let start_item = MenuItem::with_id(app, "start_kanata", "Start Kanata", true, None::<&str>)?;
     let stop_item = MenuItem::with_id(app, "stop_kanata", "Stop Kanata", false, None::<&str>)?;
     let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+    let logs_item = MenuItem::with_id(app, "show_logs", "Show Logs", true, None::<&str>)?;
     let separator1 = PredefinedMenuItem::separator(app)?;
     let separator2 = PredefinedMenuItem::separator(app)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,
-        &[&start_item, &stop_item, &separator1, &settings_item, &separator2, &quit_item],
+        &[&start_item, &stop_item, &separator1, &settings_item, &logs_item, &separator2, &quit_item],
     )?;
 
     TrayIconBuilder::new()
@@ -33,6 +34,9 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("Stop kanata requested from tray");
             }
             "settings" => {
+                open_settings_window(app);
+            }
+            "show_logs" => {
                 open_settings_window(app);
             }
             "quit" => {

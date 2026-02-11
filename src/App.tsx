@@ -12,10 +12,14 @@ import { basicHomeRowMods } from './lib/kanata/presets';
 import { generateConfig } from './lib/kanata/generator';
 import { parseKanataConfig } from './lib/kanata/parser';
 import { applyTheme, getStoredTheme } from './lib/theme';
-import { ThemeToggle } from './components/settings/ThemeToggle';
+import { PreviewTab } from './components/preview/PreviewTab';
+import { LogViewer } from './components/log/LogViewer';
+import { SettingsDialog } from './components/settings/SettingsDialog';
+import { AssistantFab } from './components/assistant/AssistantFab';
+import { AssistantDialog } from './components/assistant/AssistantDialog';
 
 type KanataStatus = 'stopped' | 'running';
-type TabId = 'wizard' | 'editor' | 'export';
+type TabId = 'wizard' | 'editor' | 'preview' | 'logs' | 'export';
 
 function App() {
   const [status, setStatus] = useState<KanataStatus>('stopped');
@@ -26,6 +30,8 @@ function App() {
   const [configFilePath, setConfigFilePath] = useState<string>('');
   const [isDirty, setDirty] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   // Config context value
   const configStore = useMemo<ConfigStore>(
@@ -58,7 +64,13 @@ function App() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        getCurrentWebviewWindow().close();
+        if (settingsOpen) {
+          setSettingsOpen(false);
+        } else if (assistantOpen) {
+          setAssistantOpen(false);
+        } else {
+          getCurrentWebviewWindow().close();
+        }
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -67,7 +79,7 @@ function App() {
       clearInterval(interval);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [settingsOpen, assistantOpen]);
 
   // Resolve config dir path on mount, then try to auto-load saved config
   useEffect(() => {
@@ -154,12 +166,32 @@ function App() {
     }
   }, [config, configFilePath, selectedLayout]);
 
+  // Handle tab change — warn if switching to preview while kanata is running
+  const handleTabChange = useCallback(async (tabId: TabId) => {
+    if (tabId === 'preview' && status === 'running') {
+      const stop = window.confirm(
+        'Kanata is currently running. Stop it before entering Preview mode?'
+      );
+      if (stop) {
+        try {
+          await invoke('stop_kanata');
+          setStatus('stopped');
+        } catch {
+          // Failed to stop, continue anyway
+        }
+      }
+    }
+    setActiveTab(tabId);
+  }, [status]);
+
   const configText = useMemo(() => generateConfig(config), [config]);
   const isErgo = selectedLayout !== 'qwerty';
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'wizard', label: 'Quick Setup' },
     { id: 'editor', label: isErgo ? 'Ergo Editor' : 'QWERTY Editor' },
+    { id: 'preview', label: 'Preview' },
+    { id: 'logs', label: 'Logs' },
     { id: 'export', label: 'Export' },
   ];
 
@@ -187,7 +219,17 @@ function App() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              title="Settings"
+              className="rounded-md border border-border p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
             <button
               type="button"
               onClick={handleSave}
@@ -203,7 +245,7 @@ function App() {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`px-4 py-2.5 text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'border-b-2 border-primary text-foreground'
@@ -270,6 +312,14 @@ function App() {
             </div>
           </div>
 
+          <div className={activeTab === 'preview' ? '' : 'hidden'}>
+            <PreviewTab />
+          </div>
+
+          <div className={activeTab === 'logs' ? 'h-full' : 'hidden'}>
+            <LogViewer />
+          </div>
+
           <div className={activeTab === 'export' ? '' : 'hidden'}>
             <div className="space-y-4">
               <div>
@@ -312,6 +362,15 @@ function App() {
             </div>
           </div>
         </main>
+
+        {/* AI Assistant FAB - only on editor tab */}
+        {activeTab === 'editor' && (
+          <AssistantFab onClick={() => setAssistantOpen(true)} />
+        )}
+
+        {/* Modals */}
+        <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        <AssistantDialog open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       </div>
     </ConfigContext.Provider>
   );
