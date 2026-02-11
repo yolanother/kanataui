@@ -60,7 +60,6 @@ export function ThemeToggle() {
           )}
         >
           {opt.icon}
-          <span className="hidden sm:inline">{opt.label}</span>
         </button>
       ))}
     </div>

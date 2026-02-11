@@ -114,51 +114,59 @@ export function QwertyEditor({
         onAddLayer={handleAddLayer}
       />
 
-      {/* Keyboard visualization */}
-      <div className="overflow-x-auto pb-2">
-        <KeyboardLayout
-          defsrc={defsrcSet}
-          layerActions={layerActions}
-          selectedKey={selectedKey}
-          aliases={config.aliases}
-          onKeySelect={handleKeySelect}
-        />
-      </div>
+      {/* Responsive layout: side-by-side on wide screens */}
+      <div className="lg:flex lg:gap-6">
+        {/* Keyboard + legend */}
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* Keyboard visualization */}
+          <div className="overflow-x-auto pb-2">
+            <KeyboardLayout
+              defsrc={defsrcSet}
+              layerActions={layerActions}
+              selectedKey={selectedKey}
+              aliases={config.aliases}
+              onKeySelect={handleKeySelect}
+            />
+          </div>
 
-      {/* Color legend */}
-      <div className="flex flex-wrap items-center gap-4 px-1 text-xs text-zinc-500">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-sm bg-blue-900/60 border border-blue-500/50" />
-          GUI/Super
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-sm bg-emerald-900/60 border border-emerald-500/50" />
-          Alt
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-sm bg-amber-900/60 border border-amber-500/50" />
-          Ctrl
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-sm bg-purple-900/60 border border-purple-500/50" />
-          Shift
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-sm bg-zinc-800 border border-zinc-600" />
-          Unmodified
-        </span>
-      </div>
+          {/* Color legend */}
+          <div className="flex flex-wrap items-center gap-4 px-1 text-xs text-zinc-500">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm bg-blue-900/60 border border-blue-500/50" />
+              GUI/Super
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm bg-emerald-900/60 border border-emerald-500/50" />
+              Alt
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm bg-amber-900/60 border border-amber-500/50" />
+              Ctrl
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm bg-purple-900/60 border border-purple-500/50" />
+              Shift
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3 w-3 rounded-sm bg-zinc-800 border border-zinc-600" />
+              Unmodified
+            </span>
+          </div>
+        </div>
 
-      {/* Key editor panel */}
-      {selectedKey && (
-        <KeyActionEditor
-          keyName={selectedKey}
-          action={selectedAction}
-          aliases={config.aliases}
-          onChange={handleActionChange}
-          onClose={() => setSelectedKey(null)}
-        />
-      )}
+        {/* Key editor panel — side panel on wide screens */}
+        {selectedKey && (
+          <div className="mt-4 lg:mt-0 lg:w-80 lg:flex-shrink-0">
+            <KeyActionEditor
+              keyName={selectedKey}
+              action={selectedAction}
+              aliases={config.aliases}
+              onChange={handleActionChange}
+              onClose={() => setSelectedKey(null)}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

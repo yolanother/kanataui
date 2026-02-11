@@ -14,14 +14,11 @@ import {
   miryokuPreset,
 } from '../../lib/kanata/presets';
 import { FULL_QWERTY_DEFSRC } from '../../lib/kanata/keys';
-import { generateConfig } from '../../lib/kanata/generator';
 import {
   ERGO_LAYOUTS,
   getErgoLayout,
   type ErgoLayoutDef,
 } from '../../lib/kanata/ergo-layouts';
-import { QwertyEditor } from '../keyboard/QwertyEditor';
-import { ErgoEditor } from '../keyboard/ErgoEditor';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,7 +42,7 @@ export interface SetupWizardProps {
 // Step indicator
 // ---------------------------------------------------------------------------
 
-const STEP_LABELS = ['Keyboard', 'Preset', 'Timing', 'Preview'];
+const STEP_LABELS = ['Keyboard', 'Preset', 'Timing'];
 
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -468,72 +465,6 @@ function StepTiming({
 }
 
 // ---------------------------------------------------------------------------
-// Step 4: Preview & Apply
-// ---------------------------------------------------------------------------
-
-function StepPreview({
-  config,
-  keyboard,
-  ergoPreset,
-}: {
-  config: KanataConfig;
-  keyboard: KeyboardChoice;
-  ergoPreset: ErgoPreset;
-}) {
-  const [showRaw, setShowRaw] = useState(false);
-  const [previewLayer, setPreviewLayer] = useState('base');
-  const configText = useMemo(() => generateConfig(config), [config]);
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-base font-semibold">Preview Your Configuration</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Review the generated configuration below, then click "Apply" to use it.
-        </p>
-      </div>
-
-      {/* Visual preview */}
-      <div className="overflow-x-auto rounded-lg border border-border p-4">
-        {keyboard === 'qwerty' ? (
-          <QwertyEditor
-            config={config}
-            onChange={() => {}}
-            selectedLayer={previewLayer}
-            onLayerChange={setPreviewLayer}
-          />
-        ) : (
-          <ErgoEditor
-            config={config}
-            onChange={() => {}}
-            selectedLayout={ergoPreset}
-            onLayoutChange={() => {}}
-            selectedLayer={previewLayer}
-            onLayerChange={setPreviewLayer}
-          />
-        )}
-      </div>
-
-      {/* Toggle raw config */}
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowRaw(!showRaw)}
-          className="text-xs font-medium text-primary hover:underline"
-        >
-          {showRaw ? 'Hide' : 'Show'} raw .kbd config
-        </button>
-        {showRaw && (
-          <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-zinc-950 border border-border p-4 text-xs font-mono text-zinc-300 whitespace-pre leading-relaxed">
-            {configText}
-          </pre>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Main wizard
 // ---------------------------------------------------------------------------
 
@@ -545,7 +476,7 @@ export function SetupWizard({ onComplete, onCancel }: SetupWizardProps) {
   const [tapTime, setTapTime] = useState(200);
   const [holdTime, setHoldTime] = useState(150);
 
-  const totalSteps = 4;
+  const totalSteps = 3;
 
   // When switching keyboard type, reset mod preset if miryoku on non-ergo
   const handleKeyboardChange = (v: KeyboardChoice) => {
@@ -561,27 +492,33 @@ export function SetupWizard({ onComplete, onCancel }: SetupWizardProps) {
     [keyboard, ergoPreset, modPreset, tapTime, holdTime],
   );
 
+  function handleApply() {
+    const layout: LayoutType = keyboard === 'qwerty' ? 'qwerty' : ergoPreset;
+    onComplete({ config: generatedConfig, layout });
+  }
+
+  // Is the current step the final step?
+  const isFinalStep = modPreset === 'none' ? step === 2 : step === totalSteps;
+
   function goNext() {
+    if (isFinalStep) {
+      handleApply();
+      return;
+    }
     // Skip timing step for 'none' preset
     if (step === 2 && modPreset === 'none') {
-      setStep(4);
-    } else if (step < totalSteps) {
+      handleApply();
+      return;
+    }
+    if (step < totalSteps) {
       setStep(step + 1);
     }
   }
 
   function goBack() {
-    // If on preview and preset is 'none', skip back over timing
-    if (step === 4 && modPreset === 'none') {
-      setStep(2);
-    } else if (step > 1) {
+    if (step > 1) {
       setStep(step - 1);
     }
-  }
-
-  function handleApply() {
-    const layout: LayoutType = keyboard === 'qwerty' ? 'qwerty' : ergoPreset;
-    onComplete({ config: generatedConfig, layout });
   }
 
   return (
@@ -613,13 +550,6 @@ export function SetupWizard({ onComplete, onCancel }: SetupWizardProps) {
             onHoldTimeChange={setHoldTime}
           />
         )}
-        {step === 4 && (
-          <StepPreview
-            config={generatedConfig}
-            keyboard={keyboard}
-            ergoPreset={ergoPreset}
-          />
-        )}
       </div>
 
       {/* Navigation buttons */}
@@ -645,23 +575,13 @@ export function SetupWizard({ onComplete, onCancel }: SetupWizardProps) {
           )}
         </div>
         <div className="flex gap-3">
-          {step < totalSteps ? (
-            <button
-              type="button"
-              onClick={goNext}
-              className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              Next
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleApply}
-              className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              Apply Configuration
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={goNext}
+            className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            {isFinalStep ? 'Save & Apply' : 'Next'}
+          </button>
         </div>
       </div>
     </div>

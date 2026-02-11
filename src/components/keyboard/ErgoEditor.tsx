@@ -496,25 +496,32 @@ export function ErgoEditor({
         onAddLayer={handleAddLayer}
       />
 
-      {/* Keyboard visualization */}
-      <ErgoKeyboard
-        layout={layout}
-        layerKeys={layerKeys}
-        selectedKeyIndex={selectedKeyIndex >= 0 ? selectedKeyIndex : undefined}
-        aliases={config.aliases}
-        onKeyClick={handleKeyClick}
-      />
+      {/* Responsive layout: side-by-side on wide screens */}
+      <div className="lg:flex lg:gap-6">
+        {/* Keyboard visualization */}
+        <div className="flex-1 min-w-0">
+          <ErgoKeyboard
+            layout={layout}
+            layerKeys={layerKeys}
+            selectedKeyIndex={selectedKeyIndex >= 0 ? selectedKeyIndex : undefined}
+            aliases={config.aliases}
+            onKeyClick={handleKeyClick}
+          />
+        </div>
 
-      {/* Key editor panel */}
-      {selectedKeyIndex >= 0 && (
-        <KeyEditorPanel
-          keyIndex={selectedKeyIndex}
-          defsrcName={selectedDefsrc}
-          action={layerKeys[selectedKeyIndex]}
-          aliases={config.aliases}
-          onActionChange={handleActionChange}
-        />
-      )}
+        {/* Key editor panel — side panel on wide screens */}
+        {selectedKeyIndex >= 0 && (
+          <div className="mt-4 lg:mt-0 lg:w-80 lg:flex-shrink-0">
+            <KeyEditorPanel
+              keyIndex={selectedKeyIndex}
+              defsrcName={selectedDefsrc}
+              action={layerKeys[selectedKeyIndex]}
+              aliases={config.aliases}
+              onActionChange={handleActionChange}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

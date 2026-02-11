@@ -45,6 +45,20 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn compute_window_size(app: &AppHandle) -> (f64, f64) {
+    if let Some(monitor) = app.primary_monitor().ok().flatten() {
+        let size = monitor.size();
+        let scale = monitor.scale_factor();
+        let screen_w = size.width as f64 / scale;
+        let screen_h = size.height as f64 / scale;
+        let w = (screen_w * 0.80).min(1200.0);
+        let h = (screen_h * 0.85).min(900.0);
+        (w, h)
+    } else {
+        (1100.0, 800.0)
+    }
+}
+
 fn open_settings_window(app: &AppHandle) {
     // If the settings window already exists, just show and focus it
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW_LABEL) {
@@ -54,21 +68,34 @@ fn open_settings_window(app: &AppHandle) {
         return;
     }
 
+    let (width, height) = compute_window_size(app);
+
     // Create a new settings window
-    let _window = tauri::WebviewWindowBuilder::new(
+    match tauri::WebviewWindowBuilder::new(
         app,
         SETTINGS_WINDOW_LABEL,
         tauri::WebviewUrl::App("index.html".into()),
     )
     .title("KanataUI Settings")
-    .inner_size(900.0, 700.0)
+    .inner_size(width, height)
     .center()
     .resizable(true)
     .decorations(true)
     .visible(true)
-    .build();
-
-    if let Err(e) = _window {
-        eprintln!("Failed to create settings window: {}", e);
+    .build()
+    {
+        Ok(window) => {
+            // Intercept close: hide the window instead of destroying it
+            let win = window.clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = win.hide();
+                }
+            });
+        }
+        Err(e) => {
+            eprintln!("Failed to create settings window: {}", e);
+        }
     }
 }

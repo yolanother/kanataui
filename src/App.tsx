@@ -10,6 +10,7 @@ import type { LayoutType } from './lib/config-state';
 import { ConfigContext, type ConfigStore } from './lib/config-state';
 import { basicHomeRowMods } from './lib/kanata/presets';
 import { generateConfig } from './lib/kanata/generator';
+import { parseKanataConfig } from './lib/kanata/parser';
 import { applyTheme, getStoredTheme } from './lib/theme';
 import { ThemeToggle } from './components/settings/ThemeToggle';
 
@@ -68,13 +69,30 @@ function App() {
     };
   }, []);
 
-  // Resolve config dir path on mount
+  // Resolve config dir path on mount, then try to auto-load saved config
   useEffect(() => {
     (async () => {
       try {
         const dir = await invoke<string>('ensure_config_dir');
         const sep = dir.includes('\\') ? '\\' : '/';
-        setConfigFilePath(`${dir}${sep}kanata.kbd`);
+        const path = `${dir}${sep}kanata.kbd`;
+        setConfigFilePath(path);
+
+        // Try to load existing config from disk
+        try {
+          const text = await invoke<string>('load_config', { path });
+          const parsed = parseKanataConfig(text);
+          setConfig(parsed);
+          setDirty(false);
+          // Restore layout from localStorage
+          const savedLayout = localStorage.getItem('kanataui-selected-layout');
+          if (savedLayout) {
+            setSelectedLayout(savedLayout as LayoutType);
+          }
+          setActiveTab('editor');
+        } catch {
+          // No saved config or parse failed — stay on wizard
+        }
       } catch {
         // Fallback handled by empty string
       }
@@ -95,13 +113,30 @@ function App() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  // Wizard completion handler
-  const handleWizardComplete = useCallback((result: WizardResult) => {
+  // Wizard completion handler — auto-saves to disk
+  const handleWizardComplete = useCallback(async (result: WizardResult) => {
     setConfig(result.config);
     setSelectedLayout(result.layout);
-    setDirty(true);
+    localStorage.setItem('kanataui-selected-layout', result.layout);
     setActiveTab('editor');
-  }, []);
+
+    // Auto-save to disk
+    if (configFilePath) {
+      try {
+        const text = generateConfig(result.config);
+        await invoke('save_config', { path: configFilePath, content: text });
+        setDirty(false);
+        setSaveMessage('Saved');
+        setTimeout(() => setSaveMessage(null), 2000);
+      } catch (e) {
+        setDirty(true);
+        setSaveMessage(`Error: ${e}`);
+        setTimeout(() => setSaveMessage(null), 4000);
+      }
+    } else {
+      setDirty(true);
+    }
+  }, [configFilePath]);
 
   // Save config to disk
   const handleSave = useCallback(async () => {
@@ -109,6 +144,7 @@ function App() {
     try {
       const text = generateConfig(config);
       await invoke('save_config', { path: configFilePath, content: text });
+      localStorage.setItem('kanataui-selected-layout', selectedLayout);
       setDirty(false);
       setSaveMessage('Saved');
       setTimeout(() => setSaveMessage(null), 2000);
@@ -116,21 +152,7 @@ function App() {
       setSaveMessage(`Error: ${e}`);
       setTimeout(() => setSaveMessage(null), 4000);
     }
-  }, [config, configFilePath]);
-
-  // Load config from disk
-  const handleLoad = useCallback(async () => {
-    if (!configFilePath) return;
-    try {
-      const text = await invoke<string>('load_config', { path: configFilePath });
-      // For now, show the raw text. Full round-trip parsing can be added later.
-      setSaveMessage(`Loaded ${text.length} bytes`);
-      setTimeout(() => setSaveMessage(null), 2000);
-    } catch (e) {
-      setSaveMessage(`Error: ${e}`);
-      setTimeout(() => setSaveMessage(null), 4000);
-    }
-  }, [configFilePath]);
+  }, [config, configFilePath, selectedLayout]);
 
   const configText = useMemo(() => generateConfig(config), [config]);
   const isErgo = selectedLayout !== 'qwerty';
@@ -172,13 +194,6 @@ function App() {
               className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
             >
               Save
-            </button>
-            <button
-              type="button"
-              onClick={handleLoad}
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
-            >
-              Load
             </button>
           </div>
         </header>

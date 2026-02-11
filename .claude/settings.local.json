@@ -19,7 +19,13 @@
       "Bash(~/.cargo/bin/cargo build:*)",
       "Bash(npm run build:*)",
       "Bash(npm test:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npx tauri build)",
+      "Bash(export PATH=\"$HOME/.cargo/bin:$PATH\")",
+      "Bash(git commit:*)",
+      "Bash(npx tauri dev)",
+      "Bash(cargo check:*)",
+      "Bash(~/.cargo/bin/cargo check:*)"
     ]
   }
 }
