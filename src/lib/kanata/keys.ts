@@ -2,7 +2,7 @@
 // Kanata Key Names, Display Labels, and Physical Layout
 // ============================================================================
 
-import type { KeyDef } from './types';
+import type { KeyDef, KeyAction, Alias, TapHoldAction, MultiAction } from './types';
 
 // ---------------------------------------------------------------------------
 // Key name -> display label mapping
@@ -283,4 +283,37 @@ export function getKeyLabel(keyName: string): string {
  */
 export function isModifier(keyName: string): boolean {
   return MODIFIER_KEYS.has(keyName);
+}
+
+/** Resolve an AliasRef to its underlying action. Returns the original action if not an alias. */
+export function resolveAlias(action: KeyAction | undefined, aliases: Alias[]): KeyAction | undefined {
+  if (!action || typeof action === 'string') return action;
+  if (action.type === 'alias-ref') {
+    const alias = aliases.find(a => a.name === action.name);
+    if (alias) return alias.action;
+  }
+  return action;
+}
+
+/** Deep-resolve an action: if it's an alias whose action is a tap-hold with a multi tap-action,
+ *  extract the underlying key from the multi. This handles advanced presets where tap is (multi a @tap). */
+export function resolveActionForDisplay(action: KeyAction | undefined, aliases: Alias[]): KeyAction | undefined {
+  const resolved = resolveAlias(action, aliases);
+  if (!resolved || typeof resolved === 'string') return resolved;
+
+  // For tap-hold with multi tap-action, extract the first key from multi
+  if (resolved.type === 'tap-hold') {
+    const th = resolved as TapHoldAction;
+    let tapAction = th.tapAction;
+    // If tap is a multi action, extract the first string key
+    if (typeof tapAction !== 'string' && tapAction.type === 'multi') {
+      const multi = tapAction as MultiAction;
+      const firstKey = multi.actions.find(a => typeof a === 'string');
+      if (firstKey) {
+        tapAction = firstKey as string;
+      }
+    }
+    return { ...th, tapAction };
+  }
+  return resolved;
 }

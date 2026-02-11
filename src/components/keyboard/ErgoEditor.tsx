@@ -10,8 +10,9 @@ import type {
   Layer,
   TapHoldAction,
   TapHoldVariant,
+  Alias,
 } from '../../lib/kanata/types';
-import { KEY_LABELS, getKeyLabel, MODIFIER_KEYS } from '../../lib/kanata/keys';
+import { KEY_LABELS, getKeyLabel, MODIFIER_KEYS, resolveActionForDisplay } from '../../lib/kanata/keys';
 import {
   ERGO_LAYOUTS,
   getErgoLayout,
@@ -42,6 +43,7 @@ interface KeyEditorPanelProps {
   keyIndex: number;
   defsrcName: string;
   action: KeyAction | undefined;
+  aliases?: Alias[];
   onActionChange: (keyIndex: number, action: KeyAction) => void;
 }
 
@@ -60,14 +62,16 @@ const KEY_OPTIONS = Object.entries(KEY_LABELS).map(([name, label]) => ({
   label: `${label} (${name})`,
 }));
 
-function KeyEditorPanel({ keyIndex, defsrcName, action, onActionChange }: KeyEditorPanelProps) {
+function KeyEditorPanel({ keyIndex, defsrcName, action, aliases, onActionChange }: KeyEditorPanelProps) {
+  // Resolve alias-ref to underlying action for display
+  const resolved = resolveActionForDisplay(action, aliases ?? []);
   // Determine current tap/hold values
-  const isTapHold = action && typeof action !== 'string' && action.type === 'tap-hold';
-  const tapHold = isTapHold ? (action as TapHoldAction) : null;
+  const isTapHold = resolved && typeof resolved !== 'string' && resolved.type === 'tap-hold';
+  const tapHold = isTapHold ? (resolved as TapHoldAction) : null;
 
   const tapValue = tapHold
     ? (typeof tapHold.tapAction === 'string' ? tapHold.tapAction : '')
-    : (typeof action === 'string' ? action : '');
+    : (typeof resolved === 'string' ? resolved : '');
 
   const holdValue = tapHold
     ? (typeof tapHold.holdAction === 'string' ? tapHold.holdAction : '')
@@ -497,6 +501,7 @@ export function ErgoEditor({
         layout={layout}
         layerKeys={layerKeys}
         selectedKeyIndex={selectedKeyIndex >= 0 ? selectedKeyIndex : undefined}
+        aliases={config.aliases}
         onKeyClick={handleKeyClick}
       />
 
@@ -506,6 +511,7 @@ export function ErgoEditor({
           keyIndex={selectedKeyIndex}
           defsrcName={selectedDefsrc}
           action={layerKeys[selectedKeyIndex]}
+          aliases={config.aliases}
           onActionChange={handleActionChange}
         />
       )}

@@ -4,9 +4,9 @@ import type {
   KeyAction,
   TapHoldAction,
   TapHoldVariant,
-  AliasRef,
+  Alias,
 } from "../../lib/kanata/types";
-import { getKeyLabel, MODIFIER_KEYS } from "../../lib/kanata/keys";
+import { getKeyLabel, MODIFIER_KEYS, resolveActionForDisplay } from "../../lib/kanata/keys";
 import { keyActionToString } from "../../lib/kanata/generator";
 
 // ---------------------------------------------------------------------------
@@ -36,6 +36,8 @@ export interface KeyActionEditorProps {
   keyName: string;
   /** Current action for this key. */
   action?: KeyAction;
+  /** Aliases from config for resolving alias-ref actions. */
+  aliases?: Alias[];
   /** Called when the action is changed. */
   onChange: (keyName: string, newAction: KeyAction) => void;
   /** Called to close the editor panel. */
@@ -45,11 +47,12 @@ export interface KeyActionEditorProps {
 export function KeyActionEditor({
   keyName,
   action,
+  aliases,
   onChange,
   onClose,
 }: KeyActionEditorProps) {
   // Determine the current editing mode
-  const [mode, setMode] = useState<"passthrough" | "tap-hold" | "alias">("passthrough");
+  const [mode, setMode] = useState<"passthrough" | "tap-hold">("passthrough");
   const [tapKey, setTapKey] = useState(keyName);
   const [holdMod, setHoldMod] = useState("lctl");
   const [variant, setVariant] = useState<TapHoldVariant>("tap-hold");
@@ -58,19 +61,16 @@ export function KeyActionEditor({
 
   // Sync state from current action when key changes
   useEffect(() => {
-    if (!action || typeof action === "string") {
+    const resolved = resolveActionForDisplay(action, aliases ?? []);
+
+    if (!resolved || typeof resolved === "string") {
       setMode("passthrough");
-      setTapKey(typeof action === "string" ? action : keyName);
+      setTapKey(typeof resolved === "string" ? resolved : keyName);
       return;
     }
 
-    if (action.type === "alias-ref") {
-      setMode("alias");
-      return;
-    }
-
-    if (action.type === "tap-hold") {
-      const th = action as TapHoldAction;
+    if (resolved.type === "tap-hold") {
+      const th = resolved as TapHoldAction;
       setMode("tap-hold");
       setVariant(th.variant);
       setTapKey(typeof th.tapAction === "string" ? th.tapAction : keyName);
@@ -82,7 +82,7 @@ export function KeyActionEditor({
 
     // For other complex actions, just show as passthrough
     setMode("passthrough");
-  }, [action, keyName]);
+  }, [action, keyName, aliases]);
 
   function applyChange() {
     if (mode === "passthrough") {
@@ -237,26 +237,16 @@ export function KeyActionEditor({
         </div>
       )}
 
-      {/* Alias display (read-only for now) */}
-      {mode === "alias" && action && typeof action !== "string" && action.type === "alias-ref" && (
-        <div className="rounded-md bg-muted p-3 text-sm">
-          This key uses alias <code className="rounded bg-background px-1">@{(action as AliasRef).name}</code>.
-          Edit the alias in the config directly to change its behavior.
-        </div>
-      )}
-
       {/* Apply button */}
-      {mode !== "alias" && (
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            onClick={applyChange}
-            className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-          >
-            Apply
-          </button>
-        </div>
-      )}
+      <div className="mt-4 flex justify-end">
+        <button
+          type="button"
+          onClick={applyChange}
+          className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          Apply
+        </button>
+      </div>
     </div>
   );
 }

@@ -10,6 +10,8 @@ import type { LayoutType } from './lib/config-state';
 import { ConfigContext, type ConfigStore } from './lib/config-state';
 import { basicHomeRowMods } from './lib/kanata/presets';
 import { generateConfig } from './lib/kanata/generator';
+import { applyTheme, getStoredTheme } from './lib/theme';
+import { ThemeToggle } from './components/settings/ThemeToggle';
 
 type KanataStatus = 'stopped' | 'running';
 type TabId = 'wizard' | 'editor' | 'export';
@@ -77,6 +79,20 @@ function App() {
         // Fallback handled by empty string
       }
     })();
+  }, []);
+
+  // Apply theme on mount and listen for system theme changes
+  useEffect(() => {
+    applyTheme(getStoredTheme());
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => {
+      const stored = getStoredTheme();
+      if (stored === 'system') {
+        applyTheme('system');
+      }
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
   }, []);
 
   // Wizard completion handler
@@ -149,6 +165,7 @@ function App() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <button
               type="button"
               onClick={handleSave}
@@ -183,16 +200,16 @@ function App() {
           ))}
         </nav>
 
-        {/* Tab content */}
+        {/* Tab content - all tabs always rendered, hidden via CSS to preserve state */}
         <main className="flex-1 overflow-auto p-6">
-          {activeTab === 'wizard' && (
+          <div className={activeTab === 'wizard' ? '' : 'hidden'}>
             <SetupWizard
               onComplete={handleWizardComplete}
               onCancel={() => setActiveTab('editor')}
             />
-          )}
+          </div>
 
-          {activeTab === 'editor' && (
+          <div className={activeTab === 'editor' ? '' : 'hidden'}>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -236,9 +253,9 @@ function App() {
                 />
               )}
             </div>
-          )}
+          </div>
 
-          {activeTab === 'export' && (
+          <div className={activeTab === 'export' ? '' : 'hidden'}>
             <div className="space-y-4">
               <div>
                 <h2 className="text-base font-semibold">Export Configuration</h2>
@@ -278,7 +295,7 @@ function App() {
                 </p>
               )}
             </div>
-          )}
+          </div>
         </main>
       </div>
     </ConfigContext.Provider>

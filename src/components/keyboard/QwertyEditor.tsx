@@ -120,6 +120,7 @@ export function QwertyEditor({
           defsrc={defsrcSet}
           layerActions={layerActions}
           selectedKey={selectedKey}
+          aliases={config.aliases}
           onKeySelect={handleKeySelect}
         />
       </div>
@@ -153,6 +154,7 @@ export function QwertyEditor({
         <KeyActionEditor
           keyName={selectedKey}
           action={selectedAction}
+          aliases={config.aliases}
           onChange={handleActionChange}
           onClose={() => setSelectedKey(null)}
         />

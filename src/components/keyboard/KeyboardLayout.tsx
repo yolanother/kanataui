@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { KeyboardKey, KEY_GAP } from "./KeyboardKey";
 import { QWERTY_LAYOUT } from "../../lib/kanata/keys";
-import type { KeyAction } from "../../lib/kanata/types";
+import type { KeyAction, Alias } from "../../lib/kanata/types";
 import type { KeyDef } from "../../lib/kanata/types";
 
 // ---------------------------------------------------------------------------
@@ -36,6 +36,8 @@ export interface KeyboardLayoutProps {
   layerActions: Map<string, KeyAction>;
   /** Currently selected key name, if any. */
   selectedKey?: string | null;
+  /** Aliases from config for resolving alias-ref actions. */
+  aliases?: Alias[];
   /** Called when a key is clicked. */
   onKeySelect?: (keyName: string) => void;
 }
@@ -44,6 +46,7 @@ export function KeyboardLayout({
   defsrc,
   layerActions,
   selectedKey,
+  aliases,
   onKeySelect,
 }: KeyboardLayoutProps) {
   const rows = useMemo(() => groupByRow(QWERTY_LAYOUT), []);
@@ -68,6 +71,7 @@ export function KeyboardLayout({
                 width={keyDef.width}
                 selected={selectedKey === keyDef.name}
                 inDefsrc={inDefsrc}
+                aliases={aliases}
                 onClick={() => onKeySelect?.(keyDef.name)}
               />
             );

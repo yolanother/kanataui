@@ -2,7 +2,7 @@
 // ErgoKeyboard - Split keyboard visual renderer
 // ============================================================================
 
-import type { KeyAction } from '../../lib/kanata/types';
+import type { KeyAction, Alias } from '../../lib/kanata/types';
 import type { ErgoLayoutDef, KeyPosition } from '../../lib/kanata/ergo-layouts';
 import { getTotalKeys } from '../../lib/kanata/ergo-layouts';
 import { ErgoKey } from './ErgoKey';
@@ -69,6 +69,8 @@ export interface ErgoKeyboardProps {
   layerKeys: KeyAction[];
   /** Index of the currently selected key (or -1 / undefined). */
   selectedKeyIndex?: number;
+  /** Aliases from config for resolving alias-ref actions. */
+  aliases?: Alias[];
   /** Callback when a key is clicked. */
   onKeyClick?: (keyIndex: number) => void;
 }
@@ -77,6 +79,7 @@ export function ErgoKeyboard({
   layout,
   layerKeys,
   selectedKeyIndex,
+  aliases,
   onKeyClick,
 }: ErgoKeyboardProps) {
   const { leftKeys, rightKeys, leftThumb, rightThumb, defaultDefsrc, rows } = layout;
@@ -135,6 +138,7 @@ export function ErgoKeyboard({
             width={pos.width}
             height={pos.height}
             selected={selectedKeyIndex === idx}
+            aliases={aliases}
             onClick={() => onKeyClick?.(idx)}
           />
         </div>,
@@ -154,6 +158,7 @@ export function ErgoKeyboard({
             width={pos.width}
             height={pos.height}
             selected={selectedKeyIndex === idx}
+            aliases={aliases}
             onClick={() => onKeyClick?.(idx)}
           />
         </div>,
@@ -178,6 +183,7 @@ export function ErgoKeyboard({
           width={pos.width}
           height={pos.height}
           selected={selectedKeyIndex === idx}
+          aliases={aliases}
           onClick={() => onKeyClick?.(idx)}
         />
       </div>,
@@ -201,6 +207,7 @@ export function ErgoKeyboard({
           width={pos.width}
           height={pos.height}
           selected={selectedKeyIndex === idx}
+          aliases={aliases}
           onClick={() => onKeyClick?.(idx)}
         />
       </div>,

@@ -13,6 +13,8 @@ export {
   HOME_ROW_DEFSRC,
   getKeyLabel,
   isModifier,
+  resolveAlias,
+  resolveActionForDisplay,
 } from './keys';
 export {
   basicHomeRowMods,
@@ -26,6 +28,7 @@ export {
   CORNE_LAYOUT,
   LILY58_LAYOUT,
   MOONLANDER_LAYOUT,
+  KINESIS_LAYOUT,
   getErgoLayout,
   getTotalKeys,
   buildCustomLayout,

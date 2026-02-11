@@ -208,6 +208,57 @@ export const MOONLANDER_LAYOUT: ErgoLayoutDef = {
 };
 
 // ---------------------------------------------------------------------------
+// Preset: Kinesis Advantage Pro (60 keys)
+// ---------------------------------------------------------------------------
+
+const KINESIS_STAGGER = [0.5, 0.25, 0, 0, 0.125, 0.375];
+
+const KINESIS_LEFT = buildHalfKeys(4, 6, KINESIS_STAGGER);
+const KINESIS_RIGHT = mirrorHalf(buildHalfKeys(4, 6, KINESIS_STAGGER), 6);
+
+function buildThumbGrid(baseRow: number): KeyPosition[] {
+  return [
+    { row: baseRow, col: 0 },
+    { row: baseRow, col: 1 },
+    { row: baseRow, col: 2 },
+    { row: baseRow + 1, col: 0 },
+    { row: baseRow + 1, col: 1 },
+    { row: baseRow + 1, col: 2 },
+  ];
+}
+
+const KINESIS_LEFT_THUMB = buildThumbGrid(4);
+const KINESIS_RIGHT_THUMB = buildThumbGrid(4);
+
+const KINESIS_DEFSRC = [
+  // Row 0
+  '=', '1', '2', '3', '4', '5',          '6', '7', '8', '9', '0', '-',
+  // Row 1
+  'tab', 'q', 'w', 'e', 'r', 't',        'y', 'u', 'i', 'o', 'p', '\\',
+  // Row 2 (home)
+  'caps', 'a', 's', 'd', 'f', 'g',        'h', 'j', 'k', 'l', ';', "'",
+  // Row 3
+  'lsft', 'z', 'x', 'c', 'v', 'b',       'n', 'm', ',', '.', '/', 'rsft',
+  // Thumbs left, right
+  'lctl', 'lalt', 'home', 'end', 'spc', 'bspc',
+  'del', 'ret', 'pgup', 'pgdn', 'ralt', 'rctl',
+];
+
+export const KINESIS_LAYOUT: ErgoLayoutDef = {
+  id: 'kinesis',
+  name: 'Kinesis Advantage',
+  description: '60-key split: 4 rows x 6 cols + 6 thumb keys per side (2x3 grid)',
+  rows: 4,
+  columns: 6,
+  thumbKeys: 6,
+  leftKeys: KINESIS_LEFT,
+  rightKeys: KINESIS_RIGHT,
+  leftThumb: KINESIS_LEFT_THUMB,
+  rightThumb: KINESIS_RIGHT_THUMB,
+  defaultDefsrc: KINESIS_DEFSRC,
+};
+
+// ---------------------------------------------------------------------------
 // Custom layout builder
 // ---------------------------------------------------------------------------
 
@@ -266,6 +317,7 @@ export const ERGO_LAYOUTS: Record<string, ErgoLayoutDef> = {
   corne: CORNE_LAYOUT,
   lily58: LILY58_LAYOUT,
   moonlander: MOONLANDER_LAYOUT,
+  kinesis: KINESIS_LAYOUT,
 };
 
 /** Get layout definition by id, falling back to Corne. */

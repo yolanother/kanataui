@@ -28,7 +28,7 @@ import { ErgoEditor } from '../keyboard/ErgoEditor';
 // ---------------------------------------------------------------------------
 
 type KeyboardChoice = 'qwerty' | 'ergo';
-type ErgoPreset = 'corne' | 'lily58' | 'moonlander';
+type ErgoPreset = 'corne' | 'lily58' | 'moonlander' | 'kinesis';
 type ModPreset = 'basic-gacs' | 'advanced-gacs' | 'basic-cags' | 'advanced-cags' | 'miryoku' | 'none';
 
 export interface WizardResult {

@@ -9,7 +9,7 @@ import type { KanataConfig } from './kanata/types';
 // Types
 // ---------------------------------------------------------------------------
 
-export type LayoutType = 'qwerty' | 'corne' | 'lily58' | 'moonlander' | 'custom';
+export type LayoutType = 'qwerty' | 'corne' | 'lily58' | 'moonlander' | 'kinesis' | 'custom';
 
 export interface ConfigState {
   currentConfig: KanataConfig;

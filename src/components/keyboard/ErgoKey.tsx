@@ -3,8 +3,8 @@
 // ============================================================================
 
 import { cn } from '../../lib/utils';
-import type { KeyAction, TapHoldAction } from '../../lib/kanata/types';
-import { getKeyLabel, MODIFIER_KEYS } from '../../lib/kanata/keys';
+import type { KeyAction, TapHoldAction, Alias } from '../../lib/kanata/types';
+import { getKeyLabel, MODIFIER_KEYS, resolveActionForDisplay } from '../../lib/kanata/keys';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,6 +83,8 @@ export interface ErgoKeyProps {
   height?: number;
   /** Is this key currently selected? */
   selected?: boolean;
+  /** Aliases from config for resolving alias-ref actions. */
+  aliases?: Alias[];
   /** Click handler. */
   onClick?: () => void;
 }
@@ -97,11 +99,13 @@ export function ErgoKey({
   width = 1,
   height = 1,
   selected = false,
+  aliases,
   onClick,
 }: ErgoKeyProps) {
-  const tap = actionLabel(action);
-  const hold = holdLabel(action);
-  const modColor = getModifierColor(action);
+  const resolvedAction = resolveActionForDisplay(action, aliases ?? []);
+  const tap = actionLabel(resolvedAction);
+  const hold = holdLabel(resolvedAction);
+  const modColor = getModifierColor(resolvedAction);
 
   const w = width * KEY_SIZE + (width - 1) * KEY_GAP;
   const h = height * KEY_SIZE + (height - 1) * KEY_GAP;

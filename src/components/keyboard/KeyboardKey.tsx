@@ -1,6 +1,6 @@
 import { cn } from "../../lib/utils";
-import type { KeyAction, AliasRef, TapHoldAction, MultiAction } from "../../lib/kanata/types";
-import { getKeyLabel, isModifier, MODIFIER_SHORT } from "../../lib/kanata/keys";
+import type { KeyAction, AliasRef, TapHoldAction, MultiAction, Alias } from "../../lib/kanata/types";
+import { getKeyLabel, isModifier, MODIFIER_SHORT, resolveActionForDisplay } from "../../lib/kanata/keys";
 import { keyActionToString } from "../../lib/kanata/generator";
 
 // ---------------------------------------------------------------------------
@@ -160,6 +160,8 @@ export interface KeyboardKeyProps {
   selected?: boolean;
   /** Whether the key is in the defsrc set. */
   inDefsrc?: boolean;
+  /** Aliases from config for resolving alias-ref actions. */
+  aliases?: Alias[];
   /** Called when the key is clicked. */
   onClick?: () => void;
 }
@@ -175,11 +177,13 @@ export function KeyboardKey({
   width = 1,
   selected = false,
   inDefsrc = true,
+  aliases,
   onClick,
 }: KeyboardKeyProps) {
-  const display = getActionDisplay(action);
-  const variant = getKeyVariant(action);
-  const modStyle = getModifierStyle(action);
+  const resolvedAction = resolveActionForDisplay(action, aliases ?? []);
+  const display = getActionDisplay(resolvedAction);
+  const variant = getKeyVariant(resolvedAction);
+  const modStyle = getModifierStyle(resolvedAction);
   const pixelWidth = width * KEY_UNIT + (width - 1) * KEY_GAP;
 
   return (
