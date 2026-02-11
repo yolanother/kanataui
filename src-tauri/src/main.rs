@@ -21,20 +21,20 @@ pub struct LogState {
 
 const MAX_LOG_LINES: usize = 1000;
 
-#[tauri::command]
-async fn start_kanata(
-    config_path: String,
-    state: tauri::State<'_, KanataState>,
-    log_state: tauri::State<'_, LogState>,
+/// Core start logic, callable from both the command and the tray handler.
+pub async fn do_start_kanata(
+    config_path: &str,
+    process: &Mutex<Option<Child>>,
+    log_lines: &std::sync::Arc<Mutex<VecDeque<String>>>,
 ) -> Result<(), String> {
-    let mut proc = state.process.lock().map_err(|e| e.to_string())?;
+    let mut proc = process.lock().map_err(|e| e.to_string())?;
 
     if proc.is_some() {
         return Err("Kanata is already running".into());
     }
 
     let mut child = tokio::process::Command::new("kanata")
-        .args(["-c", &config_path])
+        .args(["-c", config_path])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
@@ -44,7 +44,7 @@ async fn start_kanata(
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
 
-    let lines_arc = std::sync::Arc::clone(&log_state.lines);
+    let lines_arc = std::sync::Arc::clone(log_lines);
 
     if let Some(stdout) = stdout {
         let lines = std::sync::Arc::clone(&lines_arc);
@@ -85,6 +85,31 @@ async fn start_kanata(
     Ok(())
 }
 
+/// Core stop logic, callable from both the command and the tray handler.
+pub async fn do_stop_kanata(
+    process: &Mutex<Option<Child>>,
+) -> Result<(), String> {
+    let child = {
+        let mut proc = process.lock().map_err(|e| e.to_string())?;
+        proc.take()
+    };
+
+    if let Some(mut child) = child {
+        child.kill().await.map_err(|e| format!("Failed to stop kanata: {}", e))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn start_kanata(
+    config_path: String,
+    state: tauri::State<'_, KanataState>,
+    log_state: tauri::State<'_, LogState>,
+) -> Result<(), String> {
+    do_start_kanata(&config_path, &state.process, &log_state.lines).await
+}
+
 fn format_timestamp() -> String {
     use std::time::SystemTime;
     let now = SystemTime::now()
@@ -99,16 +124,7 @@ fn format_timestamp() -> String {
 
 #[tauri::command]
 async fn stop_kanata(state: tauri::State<'_, KanataState>) -> Result<(), String> {
-    let child = {
-        let mut proc = state.process.lock().map_err(|e| e.to_string())?;
-        proc.take()
-    };
-
-    if let Some(mut child) = child {
-        child.kill().await.map_err(|e| format!("Failed to stop kanata: {}", e))?;
-    }
-
-    Ok(())
+    do_stop_kanata(&state.process).await
 }
 
 #[tauri::command]

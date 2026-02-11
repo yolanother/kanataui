@@ -4,7 +4,9 @@ import type {
   KeyAction,
   TapHoldAction,
   TapHoldVariant,
+  LayerAction,
   Alias,
+  Layer,
 } from "../../lib/kanata/types";
 import { getKeyLabel, MODIFIER_KEYS, resolveActionForDisplay } from "../../lib/kanata/keys";
 import { keyActionToString } from "../../lib/kanata/generator";
@@ -27,20 +29,24 @@ const MODIFIER_OPTIONS = Array.from(MODIFIER_KEYS).map((m) => ({
   label: getKeyLabel(m),
 }));
 
+const LAYER_OPS: { value: LayerAction['op']; label: string; description: string }[] = [
+  { value: 'layer-switch', label: 'Layer Switch', description: 'Permanently switch to another layer' },
+  { value: 'layer-toggle', label: 'Layer Toggle', description: 'Toggle a layer on/off' },
+  { value: 'layer-while-held', label: 'Layer While Held', description: 'Activate layer while key is held' },
+];
+
+type EditorMode = "passthrough" | "tap-hold" | "layer";
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
 export interface KeyActionEditorProps {
-  /** The defsrc key name being edited. */
   keyName: string;
-  /** Current action for this key. */
   action?: KeyAction;
-  /** Aliases from config for resolving alias-ref actions. */
   aliases?: Alias[];
-  /** Called when the action is changed. */
+  layers?: Layer[];
   onChange: (keyName: string, newAction: KeyAction) => void;
-  /** Called to close the editor panel. */
   onClose: () => void;
 }
 
@@ -48,16 +54,22 @@ export function KeyActionEditor({
   keyName,
   action,
   aliases,
+  layers,
   onChange,
   onClose,
 }: KeyActionEditorProps) {
-  // Determine the current editing mode
-  const [mode, setMode] = useState<"passthrough" | "tap-hold">("passthrough");
+  const [mode, setMode] = useState<EditorMode>("passthrough");
   const [tapKey, setTapKey] = useState(keyName);
   const [holdMod, setHoldMod] = useState("lctl");
+  const [holdIsLayer, setHoldIsLayer] = useState(false);
+  const [holdLayerOp, setHoldLayerOp] = useState<LayerAction['op']>('layer-while-held');
+  const [holdLayerTarget, setHoldLayerTarget] = useState('');
   const [variant, setVariant] = useState<TapHoldVariant>("tap-hold");
   const [tapTime, setTapTime] = useState("200");
   const [holdTime, setHoldTime] = useState("150");
+  // Layer action mode
+  const [layerOp, setLayerOp] = useState<LayerAction['op']>('layer-switch');
+  const [layerTarget, setLayerTarget] = useState('');
 
   // Sync state from current action when key changes
   useEffect(() => {
@@ -66,6 +78,7 @@ export function KeyActionEditor({
     if (!resolved || typeof resolved === "string") {
       setMode("passthrough");
       setTapKey(typeof resolved === "string" ? resolved : keyName);
+      setHoldIsLayer(false);
       return;
     }
 
@@ -74,14 +87,34 @@ export function KeyActionEditor({
       setMode("tap-hold");
       setVariant(th.variant);
       setTapKey(typeof th.tapAction === "string" ? th.tapAction : keyName);
-      setHoldMod(typeof th.holdAction === "string" ? th.holdAction : "lctl");
+
+      // Check if hold action is a layer action
+      if (typeof th.holdAction !== 'string' && th.holdAction.type === 'layer-action') {
+        const la = th.holdAction as LayerAction;
+        setHoldIsLayer(true);
+        setHoldLayerOp(la.op);
+        setHoldLayerTarget(la.layer);
+        setHoldMod('lctl');
+      } else {
+        setHoldIsLayer(false);
+        setHoldMod(typeof th.holdAction === "string" ? th.holdAction : "lctl");
+      }
+
       setTapTime(String(th.tapTimeout));
       setHoldTime(String(th.holdTimeout));
       return;
     }
 
-    // For other complex actions, just show as passthrough
+    if (resolved.type === "layer-action") {
+      const la = resolved as LayerAction;
+      setMode("layer");
+      setLayerOp(la.op);
+      setLayerTarget(la.layer);
+      return;
+    }
+
     setMode("passthrough");
+    setHoldIsLayer(false);
   }, [action, keyName, aliases]);
 
   function applyChange() {
@@ -90,20 +123,40 @@ export function KeyActionEditor({
       return;
     }
 
+    if (mode === "layer") {
+      if (!layerTarget) return;
+      const la: LayerAction = { type: 'layer-action', op: layerOp, layer: layerTarget };
+      onChange(keyName, la);
+      return;
+    }
+
     if (mode === "tap-hold") {
+      let holdAction: KeyAction;
+      if (holdIsLayer) {
+        if (!holdLayerTarget) return;
+        holdAction = { type: 'layer-action', op: holdLayerOp, layer: holdLayerTarget };
+      } else {
+        holdAction = holdMod;
+      }
+
       const newAction: TapHoldAction = {
         type: "tap-hold",
         variant,
         tapTimeout: tapTime.startsWith("$") ? tapTime : Number(tapTime),
         holdTimeout: holdTime.startsWith("$") ? holdTime : Number(holdTime),
         tapAction: tapKey,
-        holdAction: holdMod,
+        holdAction,
       };
       onChange(keyName, newAction);
     }
   }
 
+  function handleReset() {
+    onChange(keyName, keyName);
+  }
+
   const currentDisplay = action ? keyActionToString(action) : keyName;
+  const layerNames = (layers ?? []).map(l => l.name);
 
   return (
     <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
@@ -130,7 +183,7 @@ export function KeyActionEditor({
 
       {/* Mode selector */}
       <div className="mb-4 flex gap-2">
-        {(["passthrough", "tap-hold"] as const).map((m) => (
+        {(["passthrough", "tap-hold", "layer"] as const).map((m) => (
           <button
             key={m}
             type="button"
@@ -142,7 +195,7 @@ export function KeyActionEditor({
                 : "bg-muted text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
-            {m === "passthrough" ? "Simple Key" : "Tap-Hold"}
+            {m === "passthrough" ? "Simple Key" : m === "tap-hold" ? "Tap-Hold" : "Layer"}
           </button>
         ))}
       </div>
@@ -195,21 +248,100 @@ export function KeyActionEditor({
             />
           </label>
 
+          {/* Hold action type toggle */}
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-muted-foreground">Hold Action Type</span>
+            <div className="flex gap-2 mt-1">
+              <button
+                type="button"
+                onClick={() => setHoldIsLayer(false)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  !holdIsLayer
+                    ? "bg-primary/15 text-primary border border-primary/30"
+                    : "bg-muted text-muted-foreground hover:bg-accent",
+                )}
+              >
+                Modifier
+              </button>
+              <button
+                type="button"
+                onClick={() => setHoldIsLayer(true)}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  holdIsLayer
+                    ? "bg-primary/15 text-primary border border-primary/30"
+                    : "bg-muted text-muted-foreground hover:bg-accent",
+                )}
+              >
+                Layer Action
+              </button>
+            </div>
+          </div>
+
           {/* Hold modifier */}
-          <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">Hold Action (modifier)</span>
-            <select
-              value={holdMod}
-              onChange={(e) => setHoldMod(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
-            >
-              {MODIFIER_OPTIONS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label} ({m.value})
-                </option>
-              ))}
-            </select>
-          </label>
+          {!holdIsLayer && (
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Hold Modifier</span>
+              <select
+                value={holdMod}
+                onChange={(e) => setHoldMod(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                {MODIFIER_OPTIONS.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label} ({m.value})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {/* Hold layer action */}
+          {holdIsLayer && (
+            <>
+              <label className="block">
+                <span className="text-xs font-medium text-muted-foreground">Layer Operation</span>
+                <select
+                  value={holdLayerOp}
+                  onChange={(e) => setHoldLayerOp(e.target.value as LayerAction['op'])}
+                  className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  {LAYER_OPS.map((op) => (
+                    <option key={op.value} value={op.value}>
+                      {op.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {LAYER_OPS.find(op => op.value === holdLayerOp)?.description}
+                </p>
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-muted-foreground">Target Layer</span>
+                {layerNames.length > 0 ? (
+                  <select
+                    value={holdLayerTarget}
+                    onChange={(e) => setHoldLayerTarget(e.target.value)}
+                    className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  >
+                    <option value="">-- select layer --</option>
+                    {layerNames.map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={holdLayerTarget}
+                    onChange={(e) => setHoldLayerTarget(e.target.value)}
+                    placeholder="layer name"
+                    className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                )}
+              </label>
+            </>
+          )}
 
           {/* Timing */}
           <div className="grid grid-cols-2 gap-3">
@@ -237,8 +369,62 @@ export function KeyActionEditor({
         </div>
       )}
 
-      {/* Apply button */}
-      <div className="mt-4 flex justify-end">
+      {/* Layer action editor */}
+      {mode === "layer" && (
+        <div className="space-y-3">
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">Operation</span>
+            <select
+              value={layerOp}
+              onChange={(e) => setLayerOp(e.target.value as LayerAction['op'])}
+              className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              {LAYER_OPS.map((op) => (
+                <option key={op.value} value={op.value}>
+                  {op.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {LAYER_OPS.find(op => op.value === layerOp)?.description}
+            </p>
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">Target Layer</span>
+            {layerNames.length > 0 ? (
+              <select
+                value={layerTarget}
+                onChange={(e) => setLayerTarget(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                <option value="">-- select layer --</option>
+                {layerNames.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={layerTarget}
+                onChange={(e) => setLayerTarget(e.target.value)}
+                placeholder="layer name"
+                className="mt-1 block w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            )}
+          </label>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="mt-4 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleReset}
+          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          title="Reset key to its default (passthrough) value"
+        >
+          Reset to Default
+        </button>
         <button
           type="button"
           onClick={applyChange}

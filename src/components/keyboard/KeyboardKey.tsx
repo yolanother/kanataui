@@ -1,7 +1,43 @@
 import { cn } from "../../lib/utils";
-import type { KeyAction, AliasRef, TapHoldAction, MultiAction, Alias } from "../../lib/kanata/types";
+import type { KeyAction, AliasRef, TapHoldAction, MultiAction, LayerAction, Alias } from "../../lib/kanata/types";
 import { getKeyLabel, isModifier, MODIFIER_SHORT, resolveActionForDisplay } from "../../lib/kanata/keys";
 import { keyActionToString } from "../../lib/kanata/generator";
+
+// ---------------------------------------------------------------------------
+// Layer action icons (inline SVGs for compact display)
+// ---------------------------------------------------------------------------
+
+function LayerSwitchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path d="M3 8h10M10 5l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function LayerToggleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <rect x="3" y="5" width="10" height="6" rx="3" />
+      <circle cx="10" cy="8" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function LayerHeldIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <rect x="3" y="4" width="10" height="3" rx="1" />
+      <rect x="3" y="9" width="10" height="3" rx="1" />
+    </svg>
+  );
+}
+
+const LAYER_ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
+  'layer-switch': LayerSwitchIcon,
+  'layer-toggle': LayerToggleIcon,
+  'layer-while-held': LayerHeldIcon,
+};
 
 // ---------------------------------------------------------------------------
 // Key action display helpers
@@ -10,6 +46,7 @@ import { keyActionToString } from "../../lib/kanata/generator";
 interface ActionDisplay {
   topLabel: string;
   bottomLabel?: string;
+  bottomIcon?: React.ReactNode;
   isModified: boolean;
   modChar?: string;
 }
@@ -42,12 +79,18 @@ function getActionDisplay(action: KeyAction | undefined): ActionDisplay {
     const holdAction = th.holdAction;
     let holdLabel: string;
     let modChar: string | undefined;
+    let bottomIcon: React.ReactNode | undefined;
 
     if (typeof holdAction === "string") {
       holdLabel = getKeyLabel(holdAction);
       if (isModifier(holdAction)) {
         modChar = MODIFIER_SHORT[holdAction];
       }
+    } else if (holdAction.type === 'layer-action') {
+      const la = holdAction as LayerAction;
+      const Icon = LAYER_ICON_MAP[la.op];
+      holdLabel = la.layer;
+      bottomIcon = Icon ? <Icon className="h-3 w-3 inline-block mr-0.5" /> : undefined;
     } else {
       holdLabel = keyActionToString(holdAction);
     }
@@ -55,6 +98,7 @@ function getActionDisplay(action: KeyAction | undefined): ActionDisplay {
     return {
       topLabel: tapLabel,
       bottomLabel: holdLabel,
+      bottomIcon,
       isModified: true,
       modChar,
     };
@@ -74,9 +118,12 @@ function getActionDisplay(action: KeyAction | undefined): ActionDisplay {
 
   // Layer action
   if (action.type === "layer-action") {
+    const la = action as LayerAction;
+    const Icon = LAYER_ICON_MAP[la.op];
     return {
-      topLabel: action.layer,
-      bottomLabel: action.op.replace("layer-", ""),
+      topLabel: la.layer,
+      bottomIcon: Icon ? <Icon className="h-3 w-3 inline-block" /> : undefined,
+      bottomLabel: la.op === 'layer-switch' ? 'sw' : la.op === 'layer-toggle' ? 'tg' : 'held',
       isModified: true,
     };
   }
@@ -92,7 +139,7 @@ function getActionDisplay(action: KeyAction | undefined): ActionDisplay {
 // Key style helpers
 // ---------------------------------------------------------------------------
 
-type KeyVariant = "normal" | "modified" | "homerow" | "transparent" | "noop";
+type KeyVariant = "normal" | "modified" | "homerow" | "transparent" | "noop" | "layer";
 
 function getKeyVariant(action: KeyAction | undefined): KeyVariant {
   if (action === undefined) return "normal";
@@ -106,8 +153,12 @@ function getKeyVariant(action: KeyAction | undefined): KeyVariant {
     if (typeof th.holdAction === "string" && isModifier(th.holdAction)) {
       return "homerow";
     }
+    if (typeof th.holdAction !== "string" && th.holdAction.type === "layer-action") {
+      return "layer";
+    }
     return "modified";
   }
+  if (action.type === "layer-action") return "layer";
   if (action.type === "alias-ref") return "modified";
   return "modified";
 }
@@ -123,6 +174,8 @@ const variantStyles: Record<KeyVariant, string> = {
     "bg-zinc-900/50 border-zinc-700/50 text-zinc-500 hover:bg-zinc-800/50",
   noop:
     "bg-zinc-900/30 border-zinc-700/30 text-zinc-600",
+  layer:
+    "bg-indigo-900/50 border-indigo-500/40 text-indigo-100 hover:bg-indigo-900/70",
 };
 
 /** Per-modifier color overrides for home row mod keys. */
@@ -215,15 +268,16 @@ export function KeyboardKey({
       <span
         className={cn(
           "truncate px-0.5 leading-tight font-medium",
-          display.bottomLabel ? "text-[10px]" : "text-xs",
+          display.bottomLabel || display.bottomIcon ? "text-[10px]" : "text-xs",
         )}
       >
         {display.topLabel || getKeyLabel(keyName)}
       </span>
 
-      {/* Bottom label (hold action) */}
-      {display.bottomLabel && (
-        <span className="truncate px-0.5 text-[9px] leading-tight text-muted-foreground">
+      {/* Bottom label (hold action) with optional icon */}
+      {(display.bottomLabel || display.bottomIcon) && (
+        <span className="flex items-center truncate px-0.5 text-[9px] leading-tight text-muted-foreground">
+          {display.bottomIcon}
           {display.bottomLabel}
         </span>
       )}

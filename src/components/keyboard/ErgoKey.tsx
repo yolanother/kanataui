@@ -3,8 +3,44 @@
 // ============================================================================
 
 import { cn } from '../../lib/utils';
-import type { KeyAction, TapHoldAction, Alias } from '../../lib/kanata/types';
+import type { KeyAction, TapHoldAction, LayerAction, Alias } from '../../lib/kanata/types';
 import { getKeyLabel, MODIFIER_KEYS, resolveActionForDisplay } from '../../lib/kanata/keys';
+
+// ---------------------------------------------------------------------------
+// Layer action icons (inline SVGs)
+// ---------------------------------------------------------------------------
+
+function LayerSwitchIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <path d="M3 8h10M10 5l3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function LayerToggleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <rect x="3" y="5" width="10" height="6" rx="3" />
+      <circle cx="10" cy="8" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function LayerHeldIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <rect x="3" y="4" width="10" height="3" rx="1" />
+      <rect x="3" y="9" width="10" height="3" rx="1" />
+    </svg>
+  );
+}
+
+const LAYER_ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
+  'layer-switch': LayerSwitchIcon,
+  'layer-toggle': LayerToggleIcon,
+  'layer-while-held': LayerHeldIcon,
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -21,16 +57,33 @@ function actionLabel(action: KeyAction | undefined): string {
   return '...';
 }
 
-/** Get the hold modifier label (if tap-hold). */
-function holdLabel(action: KeyAction | undefined): string | null {
-  if (!action) return null;
+/** Get the hold label and optional icon for display. */
+function holdInfo(action: KeyAction | undefined): { label: string | null; icon: React.ReactNode | null } {
+  if (!action) return { label: null, icon: null };
   if (typeof action !== 'string' && action.type === 'tap-hold') {
     const hold = action.holdAction;
-    if (typeof hold === 'string') return getKeyLabel(hold);
-    if (hold.type === 'alias-ref') return `@${hold.name}`;
-    return null;
+    if (typeof hold === 'string') return { label: getKeyLabel(hold), icon: null };
+    if (hold.type === 'alias-ref') return { label: `@${hold.name}`, icon: null };
+    if (hold.type === 'layer-action') {
+      const la = hold as LayerAction;
+      const Icon = LAYER_ICON_MAP[la.op];
+      return { label: la.layer, icon: Icon ? <Icon className="h-3 w-3 inline-block" /> : null };
+    }
+    return { label: null, icon: null };
   }
-  return null;
+  return { label: null, icon: null };
+}
+
+/** Get layer action icon for standalone layer actions. */
+function layerActionInfo(action: KeyAction | undefined): { icon: React.ReactNode | null; abbr: string | null } {
+  if (!action || typeof action === 'string') return { icon: null, abbr: null };
+  if (action.type === 'layer-action') {
+    const la = action as LayerAction;
+    const Icon = LAYER_ICON_MAP[la.op];
+    const abbr = la.op === 'layer-switch' ? 'sw' : la.op === 'layer-toggle' ? 'tg' : 'held';
+    return { icon: Icon ? <Icon className="h-3 w-3 inline-block" /> : null, abbr };
+  }
+  return { icon: null, abbr: null };
 }
 
 /** Modifier key name to accent color class. */
@@ -54,6 +107,16 @@ function getModifierColor(action: KeyAction | undefined): string | null {
     }
   }
   return null;
+}
+
+function isLayerAction(action: KeyAction | undefined): boolean {
+  if (!action || typeof action === 'string') return false;
+  if (action.type === 'layer-action') return true;
+  if (action.type === 'tap-hold') {
+    const hold = (action as TapHoldAction).holdAction;
+    return typeof hold !== 'string' && hold.type === 'layer-action';
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,8 +167,10 @@ export function ErgoKey({
 }: ErgoKeyProps) {
   const resolvedAction = resolveActionForDisplay(action, aliases ?? []);
   const tap = actionLabel(resolvedAction);
-  const hold = holdLabel(resolvedAction);
+  const holdData = holdInfo(resolvedAction);
+  const layerData = layerActionInfo(resolvedAction);
   const modColor = getModifierColor(resolvedAction);
+  const isLayer = isLayerAction(resolvedAction);
 
   const w = width * KEY_SIZE + (width - 1) * KEY_GAP;
   const h = height * KEY_SIZE + (height - 1) * KEY_GAP;
@@ -134,17 +199,28 @@ export function ErgoKey({
         'hover:border-primary/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
         selected
           ? 'border-primary bg-primary/15 ring-1 ring-primary'
-          : modColor
-            ? modColor
-            : 'border-border bg-card',
+          : isLayer
+            ? 'border-indigo-500/40 bg-indigo-500/10'
+            : modColor
+              ? modColor
+              : 'border-border bg-card',
       )}
     >
-      {hold && (
-        <span className="text-[9px] leading-tight text-muted-foreground">
-          {hold}
+      {/* Hold label with optional icon */}
+      {(holdData.label || holdData.icon) && (
+        <span className="flex items-center text-[9px] leading-tight text-muted-foreground">
+          {holdData.icon}
+          {holdData.label}
         </span>
       )}
-      <span className="font-medium leading-tight">{tap || defsrcName}</span>
+      {/* Layer action icon for standalone layer actions */}
+      {!holdData.label && layerData.icon && (
+        <span className="flex items-center text-[9px] leading-tight text-muted-foreground">
+          {layerData.icon}
+          {layerData.abbr}
+        </span>
+      )}
+      <span className="font-medium leading-tight truncate max-w-full px-0.5">{tap || defsrcName}</span>
     </button>
   );
 }

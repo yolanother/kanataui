@@ -271,6 +271,41 @@ export const FULL_QWERTY_DEFSRC: string[] = QWERTY_LAYOUT.map((k) => k.name);
 export const HOME_ROW_DEFSRC: string[] = [...HOME_ROW_KEYS];
 
 /**
+ * Mapping from KeyboardEvent.code to kanata defsrc key names.
+ * Used to select keys in the editor when a physical key is pressed.
+ */
+export const CODE_TO_KANATA: Record<string, string> = {
+  Escape: 'esc',
+  F1: 'f1', F2: 'f2', F3: 'f3', F4: 'f4', F5: 'f5', F6: 'f6',
+  F7: 'f7', F8: 'f8', F9: 'f9', F10: 'f10', F11: 'f11', F12: 'f12',
+  Backquote: 'grv',
+  Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5',
+  Digit6: '6', Digit7: '7', Digit8: '8', Digit9: '9', Digit0: '0',
+  Minus: '-', Equal: '=', Backspace: 'bspc',
+  Tab: 'tab',
+  KeyQ: 'q', KeyW: 'w', KeyE: 'e', KeyR: 'r', KeyT: 't',
+  KeyY: 'y', KeyU: 'u', KeyI: 'i', KeyO: 'o', KeyP: 'p',
+  BracketLeft: '[', BracketRight: ']', Backslash: '\\',
+  CapsLock: 'caps',
+  KeyA: 'a', KeyS: 's', KeyD: 'd', KeyF: 'f', KeyG: 'g',
+  KeyH: 'h', KeyJ: 'j', KeyK: 'k', KeyL: 'l',
+  Semicolon: ';', Quote: "'", Enter: 'ret',
+  ShiftLeft: 'lsft', ShiftRight: 'rsft',
+  KeyZ: 'z', KeyX: 'x', KeyC: 'c', KeyV: 'v', KeyB: 'b',
+  KeyN: 'n', KeyM: 'm',
+  Comma: ',', Period: '.', Slash: '/',
+  ControlLeft: 'lctl', ControlRight: 'rctl',
+  AltLeft: 'lalt', AltRight: 'ralt',
+  MetaLeft: 'lmet', MetaRight: 'rmet',
+  Space: 'spc',
+  Delete: 'del', Insert: 'ins',
+  Home: 'home', End: 'end',
+  PageUp: 'pgup', PageDown: 'pgdn',
+  ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'rght',
+  PrintScreen: 'prnt', ScrollLock: 'scrlck', Pause: 'pause',
+};
+
+/**
  * Lookup a key's display label. Falls back to the raw key name
  * if no mapping is found.
  */

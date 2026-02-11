@@ -27,11 +27,38 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .tooltip("KanataUI")
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "start_kanata" => {
-                // TODO: invoke start with configured path
-                eprintln!("Start kanata requested from tray");
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let config_dir = match crate::get_config_dir_path() {
+                        Ok(dir) => dir,
+                        Err(e) => {
+                            eprintln!("Failed to get config dir: {}", e);
+                            return;
+                        }
+                    };
+                    let config_path = config_dir.join("kanata.kbd");
+                    if !config_path.exists() {
+                        eprintln!("No config file found at {:?}", config_path);
+                        return;
+                    }
+                    let config_str = config_path.to_string_lossy().to_string();
+                    let kanata_state = app.state::<crate::KanataState>();
+                    let log_state = app.state::<crate::LogState>();
+                    match crate::do_start_kanata(&config_str, &kanata_state.process, &log_state.lines).await {
+                        Ok(()) => eprintln!("Kanata started from tray"),
+                        Err(e) => eprintln!("Failed to start kanata from tray: {}", e),
+                    }
+                });
             }
             "stop_kanata" => {
-                eprintln!("Stop kanata requested from tray");
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app.state::<crate::KanataState>();
+                    match crate::do_stop_kanata(&state.process).await {
+                        Ok(()) => eprintln!("Kanata stopped from tray"),
+                        Err(e) => eprintln!("Failed to stop kanata from tray: {}", e),
+                    }
+                });
             }
             "settings" => {
                 open_settings_window(app);

@@ -1,5 +1,6 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import type { KanataConfig, KeyAction, Layer } from "../../lib/kanata/types";
+import { CODE_TO_KANATA } from "../../lib/kanata/keys";
 import { KeyboardLayout } from "./KeyboardLayout";
 import { KeyActionEditor } from "./KeyActionEditor";
 import { LayerTabs } from "./LayerTabs";
@@ -51,6 +52,23 @@ export function QwertyEditor({
     },
     [defsrcSet]
   );
+
+  // Physical keyboard listener — select key when pressed
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Don't intercept when typing in inputs/textareas
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      const kanataName = CODE_TO_KANATA[e.code];
+      if (kanataName && defsrcSet.has(kanataName)) {
+        e.preventDefault();
+        setSelectedKey(kanataName);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [defsrcSet]);
 
   // Handle layer change
   const handleLayerChange = useCallback(
@@ -154,18 +172,25 @@ export function QwertyEditor({
           </div>
         </div>
 
-        {/* Key editor panel — side panel on wide screens */}
-        {selectedKey && (
-          <div className="mt-4 lg:mt-0 lg:w-80 lg:flex-shrink-0">
+        {/* Key editor panel — always rendered to prevent layout shift */}
+        <div className="mt-4 lg:mt-0 lg:w-80 lg:flex-shrink-0">
+          {selectedKey ? (
             <KeyActionEditor
               keyName={selectedKey}
               action={selectedAction}
               aliases={config.aliases}
+              layers={config.layers}
               onChange={handleActionChange}
               onClose={() => setSelectedKey(null)}
             />
-          </div>
-        )}
+          ) : (
+            <div className="rounded-lg border border-dashed border-border bg-card/50 p-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Click a key or press a physical key to edit its action
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

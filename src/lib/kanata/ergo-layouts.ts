@@ -227,7 +227,15 @@ function buildThumbGrid(baseRow: number): KeyPosition[] {
   ];
 }
 
-const KINESIS_LEFT_THUMB = buildThumbGrid(4);
+// Right-align left thumb cluster with the 6-col left half (cols 3,4,5)
+const KINESIS_LEFT_THUMB: KeyPosition[] = [
+  { row: 4, col: 3 },
+  { row: 4, col: 4 },
+  { row: 4, col: 5 },
+  { row: 5, col: 3 },
+  { row: 5, col: 4 },
+  { row: 5, col: 5 },
+];
 const KINESIS_RIGHT_THUMB = buildThumbGrid(4);
 
 const KINESIS_DEFSRC = [

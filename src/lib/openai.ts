@@ -162,3 +162,31 @@ export async function testConnection(
 
   return response.ok;
 }
+
+/**
+ * Fetch available models from the /models endpoint.
+ * Returns an array of model IDs sorted alphabetically.
+ */
+export async function fetchModels(
+  apiKey: string,
+  baseUrl: string,
+): Promise<string[]> {
+  const url = `${baseUrl.replace(/\/+$/, '')}/models`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch models: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const models: string[] = (data.data ?? [])
+    .map((m: { id: string }) => m.id)
+    .filter((id: string) => typeof id === 'string');
+  models.sort();
+  return models;
+}

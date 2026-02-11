@@ -2,13 +2,13 @@
 // OpenAI Settings Panel
 // ============================================================================
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { cn } from '../../lib/utils';
-import { getOpenAIConfig, setOpenAIConfig, testConnection } from '../../lib/openai';
+import { getOpenAIConfig, setOpenAIConfig, testConnection, fetchModels } from '../../lib/openai';
 
 type ConnectionStatus = 'idle' | 'testing' | 'success' | 'error';
 
-const MODEL_OPTIONS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano'];
+const FALLBACK_MODELS = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano'];
 
 export function OpenAISettings() {
   const initial = getOpenAIConfig();
@@ -16,21 +16,52 @@ export function OpenAISettings() {
   const [baseUrl, setBaseUrl] = useState(initial.baseUrl);
   const [model, setModel] = useState(initial.model);
   const [customModel, setCustomModel] = useState('');
-  const [useCustomModel, setUseCustomModel] = useState(
-    !MODEL_OPTIONS.includes(initial.model) && initial.model !== '',
-  );
+  const [useCustomModel, setUseCustomModel] = useState(false);
   const [status, setStatus] = useState<ConnectionStatus>('idle');
+  const [availableModels, setAvailableModels] = useState<string[]>(FALLBACK_MODELS);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsFetched, setModelsFetched] = useState(false);
+
+  const loadModels = useCallback(async (key: string, url: string) => {
+    if (!key) return;
+    setModelsLoading(true);
+    try {
+      const models = await fetchModels(key, url);
+      if (models.length > 0) {
+        setAvailableModels(models);
+        setModelsFetched(true);
+        // If current model isn't in list and isn't custom, keep it
+        if (!models.includes(model) && model) {
+          setUseCustomModel(true);
+          setCustomModel(model);
+        }
+      }
+    } catch {
+      // Keep fallback models if fetch fails
+    } finally {
+      setModelsLoading(false);
+    }
+  }, [model]);
+
+  // Fetch models when API key or base URL changes
+  useEffect(() => {
+    if (apiKey) {
+      loadModels(apiKey, baseUrl);
+    }
+  }, []); // Only on mount; manual refresh available
 
   function handleApiKeyChange(value: string) {
     setApiKey(value);
     setOpenAIConfig({ apiKey: value });
     setStatus('idle');
+    setModelsFetched(false);
   }
 
   function handleBaseUrlChange(value: string) {
     setBaseUrl(value);
     setOpenAIConfig({ baseUrl: value });
     setStatus('idle');
+    setModelsFetched(false);
   }
 
   function handleModelChange(value: string) {
@@ -52,6 +83,10 @@ export function OpenAISettings() {
     setModel(value);
     setOpenAIConfig({ model: value });
     setStatus('idle');
+  }
+
+  async function handleRefreshModels() {
+    await loadModels(apiKey, baseUrl);
   }
 
   async function handleTestConnection() {
@@ -112,9 +147,20 @@ export function OpenAISettings() {
 
       {/* Model */}
       <div className="space-y-1.5">
-        <label htmlFor="openai-model" className="block text-xs font-medium text-muted-foreground">
-          Model
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="openai-model" className="block text-xs font-medium text-muted-foreground">
+            Model
+          </label>
+          <button
+            type="button"
+            onClick={handleRefreshModels}
+            disabled={!apiKey || modelsLoading}
+            className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Refresh model list from API"
+          >
+            {modelsLoading ? 'Loading...' : modelsFetched ? 'Refresh models' : 'Fetch models'}
+          </button>
+        </div>
         <select
           id="openai-model"
           value={useCustomModel ? '__custom__' : model}
@@ -124,7 +170,7 @@ export function OpenAISettings() {
             'focus:outline-none focus:ring-1 focus:ring-primary',
           )}
         >
-          {MODEL_OPTIONS.map((m) => (
+          {availableModels.map((m) => (
             <option key={m} value={m}>
               {m}
             </option>
