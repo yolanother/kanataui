@@ -29,33 +29,45 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             "start_kanata" => {
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
+                    let log_state = app.state::<crate::LogState>();
                     let binary = match crate::get_kanata_binary_path() {
-                        Ok(b) => b,
+                        Ok(b) => {
+                            crate::push_log(&log_state.lines, format!("{} [SYS] Resolved kanata binary: {}", crate::format_timestamp(), b));
+                            b
+                        }
                         Err(e) => {
-                            let _ = app.emit("kanata-error", format!("Binary not found: {}", e));
+                            let msg = format!("Binary not found: {}", e);
+                            crate::push_log(&log_state.lines, format!("{} [ERR] {}", crate::format_timestamp(), msg));
+                            let _ = app.emit("kanata-error", msg);
                             return;
                         }
                     };
                     let config_dir = match crate::get_config_dir_path() {
                         Ok(dir) => dir,
                         Err(e) => {
-                            let _ = app.emit("kanata-error", format!("Config dir error: {}", e));
+                            let msg = format!("Config dir error: {}", e);
+                            crate::push_log(&log_state.lines, format!("{} [ERR] {}", crate::format_timestamp(), msg));
+                            let _ = app.emit("kanata-error", msg);
                             return;
                         }
                     };
                     let config_path = config_dir.join("kanata.kbd");
                     if !config_path.exists() {
-                        let _ = app.emit("kanata-error", format!("No config file found at {:?}", config_path));
+                        let msg = format!("No config file found at {:?}", config_path);
+                        crate::push_log(&log_state.lines, format!("{} [ERR] {}", crate::format_timestamp(), msg));
+                        let _ = app.emit("kanata-error", msg);
                         return;
                     }
                     let config_str = config_path.to_string_lossy().to_string();
+                    crate::push_log(&log_state.lines, format!("{} [SYS] Starting kanata with config: {}", crate::format_timestamp(), config_str));
                     let kanata_state = app.state::<crate::KanataState>();
-                    let log_state = app.state::<crate::LogState>();
                     match crate::do_start_kanata(&binary, &config_str, &kanata_state.process, &log_state.lines).await {
                         Ok(()) => {
+                            crate::push_log(&log_state.lines, format!("{} [SYS] Kanata started successfully", crate::format_timestamp()));
                             let _ = app.emit("kanata-started", ());
                         }
                         Err(e) => {
+                            crate::push_log(&log_state.lines, format!("{} [ERR] {}", crate::format_timestamp(), e));
                             let _ = app.emit("kanata-error", e);
                         }
                     }

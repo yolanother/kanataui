@@ -103,23 +103,29 @@ function main() {
     "win_llhook_read_scancodes",
   ];
 
-  const packages = ["kanata", "kanata_simulated_input"];
+  // Map of cargo package name -> output binary name
+  const packages = [
+    { pkg: "kanata", binary: "kanata" },
+    { pkg: "kanata-sim", binary: "kanata_simulated_input" },
+  ];
 
   if (os === "darwin") {
     // macOS: build universal binaries (both architectures)
     const targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"];
     for (const triple of targets) {
-      for (const pkg of packages) {
+      for (const { pkg, binary } of packages) {
         buildPackage(cargo, pkg, triple, []);
-        copyBinary(triple, pkg);
+        copyBinary(triple, binary);
       }
     }
   } else {
     const triple = getTargetTriple();
     const features = os === "win32" ? windowsFeatures : [];
-    for (const pkg of packages) {
-      buildPackage(cargo, pkg, triple, features);
-      copyBinary(triple, pkg);
+    for (const { pkg, binary } of packages) {
+      // Windows features only apply to the kanata package, not kanata-sim
+      const pkgFeatures = pkg === "kanata" ? features : [];
+      buildPackage(cargo, pkg, triple, pkgFeatures);
+      copyBinary(triple, binary);
     }
   }
 

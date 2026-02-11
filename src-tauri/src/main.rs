@@ -22,6 +22,16 @@ pub struct LogState {
 
 const MAX_LOG_LINES: usize = 1000;
 
+/// Push a single entry into the log buffer.
+fn push_log(log_lines: &std::sync::Arc<Mutex<VecDeque<String>>>, entry: String) {
+    if let Ok(mut buf) = log_lines.lock() {
+        buf.push_back(entry);
+        while buf.len() > MAX_LOG_LINES {
+            buf.pop_front();
+        }
+    }
+}
+
 /// Core start logic, callable from both the command and the tray handler.
 pub async fn do_start_kanata(
     binary_path: &str,
@@ -110,13 +120,29 @@ async fn start_kanata(
     state: tauri::State<'_, KanataState>,
     log_state: tauri::State<'_, LogState>,
 ) -> Result<(), String> {
-    let binary = get_kanata_binary_path()?;
+    let binary = match get_kanata_binary_path() {
+        Ok(b) => {
+            push_log(&log_state.lines, format!("{} [SYS] Resolved kanata binary: {}", format_timestamp(), b));
+            b
+        }
+        Err(e) => {
+            let msg = format!("Binary not found: {}", e);
+            push_log(&log_state.lines, format!("{} [ERR] {}", format_timestamp(), msg));
+            let _ = app.emit("kanata-error", msg.clone());
+            return Err(msg);
+        }
+    };
+
+    push_log(&log_state.lines, format!("{} [SYS] Starting kanata with config: {}", format_timestamp(), config_path));
+
     match do_start_kanata(&binary, &config_path, &state.process, &log_state.lines).await {
         Ok(()) => {
+            push_log(&log_state.lines, format!("{} [SYS] Kanata started successfully", format_timestamp()));
             let _ = app.emit("kanata-started", ());
             Ok(())
         }
         Err(e) => {
+            push_log(&log_state.lines, format!("{} [ERR] {}", format_timestamp(), e));
             let _ = app.emit("kanata-error", e.clone());
             Err(e)
         }
@@ -184,6 +210,11 @@ fn clear_kanata_logs(state: tauri::State<'_, LogState>) {
 }
 
 #[tauri::command]
+fn append_kanata_log(entry: String, state: tauri::State<'_, LogState>) {
+    push_log(&state.lines, format!("{} [SYS] {}", format_timestamp(), entry));
+}
+
+#[tauri::command]
 async fn save_config(path: String, content: String) -> Result<(), String> {
     tokio::fs::write(&path, &content)
         .await
@@ -239,13 +270,18 @@ fn current_target_triple() -> &'static str {
     }
 }
 
+/// Check that a path exists and is a non-empty file (not a 0-byte placeholder).
+fn is_valid_binary(path: &std::path::Path) -> bool {
+    path.is_file() && std::fs::metadata(path).map(|m| m.len() > 0).unwrap_or(false)
+}
+
 #[tauri::command]
 fn get_kanata_binary_path() -> Result<String, String> {
     // 1. Check for Tauri sidecar binary next to the current exe
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(dir) = exe_path.parent() {
             let sidecar = dir.join(sidecar_binary_name("kanata"));
-            if sidecar.exists() {
+            if is_valid_binary(&sidecar) {
                 return Ok(sidecar.to_string_lossy().to_string());
             }
             // Also check plain name (dev mode)
@@ -254,7 +290,7 @@ fn get_kanata_binary_path() -> Result<String, String> {
             } else {
                 "kanata"
             });
-            if plain.exists() {
+            if is_valid_binary(&plain) {
                 return Ok(plain.to_string_lossy().to_string());
             }
         }
@@ -331,7 +367,7 @@ fn get_sim_binary_path() -> Result<String, String> {
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(dir) = exe_path.parent() {
             let sidecar = dir.join(sidecar_binary_name("kanata_simulated_input"));
-            if sidecar.exists() {
+            if is_valid_binary(&sidecar) {
                 return Ok(sidecar.to_string_lossy().to_string());
             }
             // Also check plain name (dev mode)
@@ -340,7 +376,7 @@ fn get_sim_binary_path() -> Result<String, String> {
             } else {
                 "kanata_simulated_input"
             });
-            if plain.exists() {
+            if is_valid_binary(&plain) {
                 return Ok(plain.to_string_lossy().to_string());
             }
         }
@@ -415,6 +451,7 @@ fn main() {
             get_kanata_status,
             get_kanata_logs,
             clear_kanata_logs,
+            append_kanata_log,
             save_config,
             load_config,
             get_config_dir,

@@ -8,6 +8,7 @@ import type {
   MacroAction,
   Alias,
   Layer,
+  SExp,
 } from "../../lib/kanata/types";
 import { getKeyLabel, MODIFIER_KEYS, resolveActionForDisplay, CODE_TO_KANATA } from "../../lib/kanata/keys";
 import { keyActionToString } from "../../lib/kanata/generator";
@@ -79,6 +80,9 @@ export function KeyActionEditor({
   const [layerOp, setLayerOp] = useState<LayerAction['op']>('layer-switch');
   const [layerTarget, setLayerTarget] = useState('');
   const [listening, setListening] = useState(false);
+  // Extra keys for -keys tap-hold variants (preserved from existing action)
+  const [savedExtraKeys, setSavedExtraKeys] = useState<SExp | undefined>(undefined);
+  const [savedTapKeys, setSavedTapKeys] = useState<SExp | undefined>(undefined);
   // Macro mode
   const [macroVariant, setMacroVariant] = useState('macro');
   const [macroSteps, setMacroSteps] = useState<Array<{ type: 'key' | 'delay'; value: string }>>([
@@ -134,6 +138,8 @@ export function KeyActionEditor({
 
       setTapTime(String(th.tapTimeout));
       setHoldTime(String(th.holdTimeout));
+      setSavedExtraKeys(th.extraKeys);
+      setSavedTapKeys(th.tapKeys);
       return;
     }
 
@@ -194,6 +200,20 @@ export function KeyActionEditor({
         holdAction = holdMod;
       }
 
+      const needsExtraKeys =
+        variant === 'tap-hold-release-keys' ||
+        variant === 'tap-hold-except-keys' ||
+        variant === 'tap-hold-tap-keys' ||
+        variant === 'tap-hold-release-tap-keys-release';
+      // Use saved extraKeys, or provide a default key list for -keys variants
+      const defaultKeyList: SExp = { type: 'list' as const, items: 'q w e r t y u i o p a s d f g h j k l z x c v b n m'.split(' ').map(k => ({ type: 'atom' as const, value: k })) };
+      const extraKeys: SExp | undefined = needsExtraKeys
+        ? (savedExtraKeys ?? defaultKeyList)
+        : undefined;
+      const tapKeysVal: SExp | undefined = variant === 'tap-hold-release-tap-keys-release'
+        ? savedTapKeys
+        : undefined;
+
       const newAction: TapHoldAction = {
         type: "tap-hold",
         variant,
@@ -201,6 +221,8 @@ export function KeyActionEditor({
         holdTimeout: holdTime.startsWith("$") ? holdTime : Number(holdTime),
         tapAction: tapKey,
         holdAction,
+        extraKeys,
+        tapKeys: tapKeysVal,
       };
       onChange(keyName, newAction);
     }

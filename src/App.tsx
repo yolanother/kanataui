@@ -164,6 +164,7 @@ function App() {
       setActiveTab('logs');
     } catch (e) {
       addToast(`Failed to start kanata: ${e}`, 'error');
+      setActiveTab('logs');
     }
   }, [isDirty, configFilePath, config, addToast]);
 

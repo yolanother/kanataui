@@ -5,6 +5,7 @@ export function LogViewer() {
   const [logs, setLogs] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
+  const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +46,13 @@ export function LogViewer() {
     }
   };
 
+  const handleCopy = () => {
+    const text = filteredLogs.join("\n");
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const filteredLogs = filter
     ? logs.filter((line) => line.toLowerCase().includes(filter.toLowerCase()))
     : logs;
@@ -59,6 +67,13 @@ export function LogViewer() {
           onChange={(e) => setFilter(e.target.value)}
           className="h-9 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
         />
+        <button
+          onClick={handleCopy}
+          disabled={filteredLogs.length === 0}
+          className="h-9 rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+        >
+          {copied ? "Copied!" : "Copy Logs"}
+        </button>
         <button
           onClick={handleClear}
           className="h-9 rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -86,7 +101,9 @@ export function LogViewer() {
                 className={
                   line.includes("[ERR]")
                     ? "text-red-400"
-                    : "text-neutral-300"
+                    : line.includes("[SYS]")
+                      ? "text-sky-400"
+                      : "text-neutral-300"
                 }
               >
                 {line}

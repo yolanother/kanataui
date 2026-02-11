@@ -12,6 +12,7 @@ import type {
   TapHoldVariant,
   LayerAction,
   Alias,
+  SExp,
 } from '../../lib/kanata/types';
 import { KEY_LABELS, getKeyLabel, MODIFIER_KEYS, resolveActionForDisplay, CODE_TO_KANATA } from '../../lib/kanata/keys';
 import {
@@ -149,6 +150,30 @@ function KeyEditorPanel({ keyIndex, defsrcName, action, aliases, layers, onActio
 
   const layerNames = layers.map(l => l.name);
 
+  // Preserve extraKeys/tapKeys from existing tap-hold action for -keys variants
+  const existingExtraKeys = tapHold?.extraKeys;
+  const existingTapKeys = tapHold?.tapKeys;
+
+  /** Build a TapHoldAction preserving extraKeys/tapKeys for -keys variants */
+  const buildTapHold = (tap: KeyAction, hold: KeyAction, v: TapHoldVariant = variant): TapHoldAction => {
+    const needsExtraKeys =
+      v === 'tap-hold-release-keys' ||
+      v === 'tap-hold-except-keys' ||
+      v === 'tap-hold-tap-keys' ||
+      v === 'tap-hold-release-tap-keys-release';
+    const defaultKeyList: SExp = { type: 'list' as const, items: 'q w e r t y u i o p a s d f g h j k l z x c v b n m'.split(' ').map(k => ({ type: 'atom' as const, value: k })) };
+    return {
+      type: 'tap-hold',
+      variant: v,
+      tapTimeout: Number(tapTimeout) || 200,
+      holdTimeout: Number(holdTimeout) || 150,
+      tapAction: tap,
+      holdAction: hold,
+      extraKeys: needsExtraKeys ? (existingExtraKeys ?? defaultKeyList) : undefined,
+      tapKeys: v === 'tap-hold-release-tap-keys-release' ? existingTapKeys : undefined,
+    };
+  };
+
   const handleTapChange = (newTap: string) => {
     if (holdValue || holdType === 'layer') {
       let holdAction: KeyAction;
@@ -157,15 +182,7 @@ function KeyEditorPanel({ keyIndex, defsrcName, action, aliases, layers, onActio
       } else {
         holdAction = holdValue || 'lctl';
       }
-      const th: TapHoldAction = {
-        type: 'tap-hold',
-        variant,
-        tapTimeout: Number(tapTimeout) || 200,
-        holdTimeout: Number(holdTimeout) || 150,
-        tapAction: newTap,
-        holdAction,
-      };
-      onActionChange(keyIndex, th);
+      onActionChange(keyIndex, buildTapHold(newTap, holdAction));
     } else {
       onActionChange(keyIndex, newTap);
     }
@@ -174,15 +191,7 @@ function KeyEditorPanel({ keyIndex, defsrcName, action, aliases, layers, onActio
   const handleHoldChange = (newHold: string) => {
     if (newHold) {
       setHoldType('modifier');
-      const th: TapHoldAction = {
-        type: 'tap-hold',
-        variant,
-        tapTimeout: Number(tapTimeout) || 200,
-        holdTimeout: Number(holdTimeout) || 150,
-        tapAction: tapValue || defsrcName,
-        holdAction: newHold,
-      };
-      onActionChange(keyIndex, th);
+      onActionChange(keyIndex, buildTapHold(tapValue || defsrcName, newHold));
     } else {
       // Remove hold -> plain key
       onActionChange(keyIndex, tapValue || defsrcName);
@@ -192,15 +201,8 @@ function KeyEditorPanel({ keyIndex, defsrcName, action, aliases, layers, onActio
   const handleHoldLayerApply = () => {
     if (!holdLayerTarget) return;
     setHoldType('layer');
-    const th: TapHoldAction = {
-      type: 'tap-hold',
-      variant,
-      tapTimeout: Number(tapTimeout) || 200,
-      holdTimeout: Number(holdTimeout) || 150,
-      tapAction: tapValue || defsrcName,
-      holdAction: { type: 'layer-action', op: holdLayerOp, layer: holdLayerTarget },
-    };
-    onActionChange(keyIndex, th);
+    const holdAction: LayerAction = { type: 'layer-action', op: holdLayerOp, layer: holdLayerTarget };
+    onActionChange(keyIndex, buildTapHold(tapValue || defsrcName, holdAction));
   };
 
   const handleVariantChange = (newVariant: TapHoldVariant) => {
