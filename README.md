@@ -17,6 +17,11 @@ A cross-platform desktop app for configuring [kanata](https://github.com/jtroo/k
 - **Autostart** — optionally launch KanataUI on system boot
 - **Dark/light theme** — follows your system preference or toggle manually
 
+## Screenshots
+<img width="1202" height="932" alt="image" src="https://github.com/user-attachments/assets/961174d8-e1be-4cfb-bf5e-1c22f5ee9afd" />
+<img width="1202" height="932" alt="image" src="https://github.com/user-attachments/assets/7d1dc110-cae6-436f-90d7-e2f0c9d9f2eb" />
+
+
 ## Tech Stack
 
 - [Tauri v2](https://v2.tauri.app/) (Rust backend)
